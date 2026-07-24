@@ -4,6 +4,7 @@
 import Foundation
 import SwiftUI
 import UIKit
+import EventKit
 import LedgeCore
 
 @MainActor
@@ -318,6 +319,38 @@ final class AppModel: ObservableObject {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         return trimmed.hasPrefix("- [x]") || trimmed.hasPrefix("* [x]")
             || trimmed.hasPrefix("- [X]") || trimmed.hasPrefix("* [X]")
+    }
+
+    // MARK: Send anywhere (A6, capped on purpose)
+
+    /// One-shot handoff to Apple Reminders. Asks for access on first use;
+    /// nothing is read back, nothing recurs. Calm by design.
+    func sendToReminders(_ entry: Entry) {
+        let eventStore = EKEventStore()
+        let finish: (Bool) -> Void = { [weak self] granted in
+            DispatchQueue.main.async {
+                guard granted else {
+                    self?.notice = "Ledge needs Reminders access for that. You can allow it in Settings."
+                    return
+                }
+                let reminder = EKReminder(eventStore: eventStore)
+                let firstLine = entry.text.components(separatedBy: "\n").first ?? entry.text
+                reminder.title = String(firstLine.prefix(120))
+                reminder.notes = entry.text + "\n\nfrom Ledge"
+                reminder.calendar = eventStore.defaultCalendarForNewReminders()
+                do {
+                    try eventStore.save(reminder, commit: true)
+                    self?.notice = "Sent to Reminders."
+                } catch {
+                    self?.notice = "Reminders did not accept that just now. Try again in a moment."
+                }
+            }
+        }
+        if #available(iOS 17.0, *) {
+            eventStore.requestFullAccessToReminders { granted, _ in finish(granted) }
+        } else {
+            eventStore.requestAccess(to: .reminder) { granted, _ in finish(granted) }
+        }
     }
 
     // MARK: Search, loops, notes

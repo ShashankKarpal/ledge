@@ -1,0 +1,96 @@
+// A7: capture widgets and a Control Center control. Every surface opens
+// straight into the inbox keyboard via the ledge://capture deep link.
+// No data is read or shown: widgets stay calm, badge-free, and count-free.
+// Built by Claude (Anthropic).
+
+import WidgetKit
+import SwiftUI
+import AppIntents
+
+struct CaptureEntry: TimelineEntry {
+    let date: Date
+}
+
+struct CaptureProvider: TimelineProvider {
+    func placeholder(in context: Context) -> CaptureEntry {
+        CaptureEntry(date: .now)
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (CaptureEntry) -> Void) {
+        completion(CaptureEntry(date: .now))
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<CaptureEntry>) -> Void) {
+        completion(Timeline(entries: [CaptureEntry(date: .now)], policy: .never))
+    }
+}
+
+struct CaptureWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+
+    var body: some View {
+        switch family {
+        case .accessoryCircular:
+            Image(systemName: "sidebar.right")
+                .font(.title2)
+        case .accessoryRectangular:
+            HStack(spacing: 6) {
+                Image(systemName: "sidebar.right")
+                Text("Capture to Ledge")
+                    .font(.headline)
+            }
+        default:
+            VStack(spacing: 8) {
+                Image(systemName: "sidebar.right")
+                    .font(.largeTitle)
+                    .foregroundStyle(Color(red: 0.906, green: 0.533, blue: 0.573))
+                Text("Capture a thought")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+struct CaptureWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "com.shashankkarpal.ledge.capturewidget", provider: CaptureProvider()) { _ in
+            CaptureWidgetView()
+                .containerBackground(.fill.tertiary, for: .widget)
+                .widgetURL(URL(string: "ledge://capture"))
+        }
+        .configurationDisplayName("Capture to Ledge")
+        .description("Opens straight into the inbox keyboard.")
+        .supportedFamilies([.systemSmall, .accessoryCircular, .accessoryRectangular])
+    }
+}
+
+struct LaunchCaptureIntent: AppIntent {
+    static var title: LocalizedStringResource = "Capture to Ledge"
+    static var description = IntentDescription("Opens Ledge ready to capture a thought.")
+    static var openAppWhenRun: Bool = true
+
+    func perform() async throws -> some IntentResult & OpensIntent {
+        .result(opensIntent: OpenURLIntent(URL(string: "ledge://capture")!))
+    }
+}
+
+struct CaptureControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "com.shashankkarpal.ledge.capturecontrol") {
+            ControlWidgetButton(action: LaunchCaptureIntent()) {
+                Label("Capture to Ledge", systemImage: "sidebar.right")
+            }
+        }
+        .displayName("Capture to Ledge")
+        .description("Opens straight into the inbox keyboard.")
+    }
+}
+
+@main
+struct LedgeWidgetBundle: WidgetBundle {
+    var body: some Widget {
+        CaptureWidget()
+        CaptureControl()
+    }
+}

@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotkey = HotkeyManager()
     private var syncWatcher: NSMetadataQuery?
     private var refreshWork: DispatchWorkItem?
+    private var dragCapture: DragJiggleCaptureController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let root = LedgeStore.defaultRoot()
@@ -31,7 +32,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openFolder: { [weak self] in
                 guard let self else { return }
                 NSWorkspace.shared.activateFileViewerSelecting([self.store.inboxURL])
-            }
+            },
+            capture: { [weak self] text in self?.quickCapture(text) ?? false }
+        )
+
+        dragCapture = DragJiggleCaptureController(
+            onDrop: { [weak self] text in self?.quickCapture(text) ?? false }
         )
 
         hotkey.onHotkey = { [weak self] in self?.panelController.toggle() }
@@ -86,6 +92,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         refreshWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
+    }
+
+    /// Shared quiet capture path for the mini-popover (A1) and the edge drop
+    /// strip (A3). Full store guards apply; failure returns false, loses nothing.
+    private func quickCapture(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        do {
+            var inbox = try store.loadInbox()
+            _ = try? store.drainSpool(into: &inbox)
+            inbox.prepend(text: trimmed, at: Date(), device: PanelContentViewController.deviceLabel)
+            try store.saveInbox(inbox)
+            return true
+        } catch {
+            return false
+        }
     }
 
     private func maintain() {

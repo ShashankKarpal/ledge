@@ -10,6 +10,7 @@ struct InboxView: View {
     @State private var draft = ""
     @State private var justCaptured = false
     @State private var editingEntry: Entry?
+    @FocusState private var captureFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,6 +24,21 @@ struct InboxView: View {
                         ForEach(day.entries) { entry in
                             EntryRow(entry: entry) {
                                 editingEntry = entry
+                            }
+                            .contextMenu {
+                                ShareLink(item: entry.text) {
+                                    Label("Share", systemImage: "square.and.arrow.up")
+                                }
+                                Button {
+                                    UIPasteboard.general.string = Self.markdownBlock(for: entry)
+                                } label: {
+                                    Label("Copy as Markdown", systemImage: "doc.on.doc")
+                                }
+                                Button {
+                                    model.sendToReminders(entry)
+                                } label: {
+                                    Label("Send to Reminders", systemImage: "checklist")
+                                }
                             }
                         }
                     } header: {
@@ -55,6 +71,10 @@ struct InboxView: View {
             TextField("Capture a thought", text: $draft, axis: .vertical)
                 .lineLimit(1...4)
                 .textFieldStyle(.plain)
+                .focused($captureFocused)
+                .onReceive(NotificationCenter.default.publisher(for: .ledgeFocusCapture)) { _ in
+                    captureFocused = true
+                }
                 .foregroundColor(.ledgeText)
                 .onSubmit(capture)
             Button(action: capture) {
@@ -69,6 +89,15 @@ struct InboxView: View {
         .background(Color.ledgeSurface, in: RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
+    }
+
+    /// A6: the exact on-disk representation of one entry, ready to paste.
+    static func markdownBlock(for entry: Entry) -> String {
+        var header = "### " + LedgeFormat.timeFormatter.string(from: entry.timestamp)
+        if let device = entry.device, !device.isEmpty {
+            header += " · " + device
+        }
+        return header + "\n\n" + entry.text
     }
 
     private var trimmedDraft: String {

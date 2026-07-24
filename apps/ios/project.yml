@@ -32,6 +32,8 @@ targets:
       - target: LedgeWatch
         embed: true
       # LedgeWatch embed END
+      - target: LedgeWidgets
+        embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.shashankkarpal.ledge
@@ -46,6 +48,12 @@ targets:
       properties:
         CFBundleDisplayName: Ledge
         UILaunchScreen: {}
+        CFBundleURLTypes:
+          - CFBundleURLName: com.shashankkarpal.ledge
+            CFBundleURLSchemes:
+              - ledge
+        NSRemindersUsageDescription: Entries you choose are handed to Reminders. Nothing else is read or written.
+        NSRemindersFullAccessUsageDescription: Entries you choose are handed to Reminders. Nothing else is read or written.
         NSMicrophoneUsageDescription: Dictation capture is transcribed on device.
         NSSpeechRecognitionUsageDescription: Dictation capture is transcribed on device.
         UISupportedInterfaceOrientations:
@@ -87,3 +95,26 @@ targets:
         WKCompanionAppBundleIdentifier: com.shashankkarpal.ledge
         WKWatchOnly: false
   # LedgeWatch target END
+
+  # A7: capture widgets + Control Center control. Deep-links into the app;
+  # reads nothing, shows nothing, stays calm.
+  LedgeWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - WidgetSources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.shashankkarpal.ledge.widgets
+        MARKETING_VERSION: "0.3.0"
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: AZ6474QK2C
+    info:
+      path: WidgetSources/Info.plist
+      properties:
+        CFBundleDisplayName: Ledge
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension

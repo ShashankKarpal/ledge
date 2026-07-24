@@ -18,10 +18,25 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.shashankkarpal.ledge</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>ledge</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Dictation capture is transcribed on device.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Entries you choose are handed to Reminders. Nothing else is read or written.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Entries you choose are handed to Reminders. Nothing else is read or written.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Dictation capture is transcribed on device.</string>
 	<key>UILaunchScreen</key>
