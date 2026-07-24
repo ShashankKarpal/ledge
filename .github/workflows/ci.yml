@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  core-tests:
+    name: LedgeCore tests
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run unit tests
+        run: swift test --package-path core
+
+  mac-build:
+    name: Mac app builds
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Ledge.app
+        run: bash scripts/build-mac.sh
+      - name: Upload app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ledge-mac
+          path: build/Ledge.app

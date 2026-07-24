@@ -1,0 +1,20 @@
+# Build products
+build/
+.build/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+
+# macOS noise
+.DS_Store
+
+# Xcode user state
+xcuserdata/
+*.xcuserstate
+
+# Never commit secrets (defensive; this project has none)
+secrets.json
+local_settings.py
+*.p12
+*.mobileprovision
+.env

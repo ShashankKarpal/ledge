@@ -1,0 +1,89 @@
+# Ledge iOS + watchOS project definition for XcodeGen.
+# Run: xcodegen generate
+#
+# IMPORTANT: change both bundle identifiers below (com.shashankkarpal.ledge and
+# com.shashankkarpal.ledge.watchkitapp) to something unique before building on a
+# free personal team. Keep the watch id as "<your iOS id>.watchkitapp" and
+# keep WKCompanionAppBundleIdentifier equal to your iOS id.
+
+name: Ledge
+
+options:
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "16.0"
+    watchOS: "9.0"
+
+packages:
+  LedgeCore:
+    path: ../../core
+
+targets:
+  Ledge:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - Sources
+    dependencies:
+      - package: LedgeCore
+      # LedgeWatch embed BEGIN (if you delete the LedgeWatch target below,
+      # also delete the two lines between these markers)
+      - target: LedgeWatch
+        embed: true
+      # LedgeWatch embed END
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.shashankkarpal.ledge
+        TARGETED_DEVICE_FAMILY: "1,2"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: AZ6474QK2C
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDisplayName: Ledge
+        UILaunchScreen: {}
+        NSMicrophoneUsageDescription: Dictation capture is transcribed on device.
+        NSSpeechRecognitionUsageDescription: Dictation capture is transcribed on device.
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+
+  # LedgeWatch target BEGIN
+  # If the watch app blocks your build (for example, no paired watch and you
+  # just want the phone app), delete everything from "LedgeWatch target BEGIN"
+  # to "LedgeWatch target END", plus the embed lines marked above, then run
+  # xcodegen generate again.
+  LedgeWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget: "9.0"
+    sources:
+      - WatchSources
+    dependencies:
+      - package: LedgeCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.shashankkarpal.ledge.watchkitapp
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: AZ6474QK2C
+    info:
+      path: WatchSources/Info.plist
+      properties:
+        CFBundleDisplayName: Ledge
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: com.shashankkarpal.ledge
+        WKWatchOnly: false
+  # LedgeWatch target END
