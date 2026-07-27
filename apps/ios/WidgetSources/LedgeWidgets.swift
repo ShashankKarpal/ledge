@@ -25,24 +25,34 @@ struct CaptureProvider: TimelineProvider {
     }
 }
 
+/// The Step mark as a template image. Tinted by whatever context draws it,
+/// so the Lock Screen gets the system tint and the Home Screen gets the rose.
+private struct StepGlyph: View {
+    let size: CGFloat
+    var body: some View {
+        Image("LedgeStep")
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+    }
+}
+
 struct CaptureWidgetView: View {
     @Environment(\.widgetFamily) private var family
 
     var body: some View {
         switch family {
         case .accessoryCircular:
-            Image(systemName: "sidebar.right")
-                .font(.title2)
+            StepGlyph(size: 22)
         case .accessoryRectangular:
             HStack(spacing: 6) {
-                Image(systemName: "sidebar.right")
+                StepGlyph(size: 17)
                 Text("Capture to Ledge")
                     .font(.headline)
             }
         default:
             VStack(spacing: 8) {
-                Image(systemName: "sidebar.right")
-                    .font(.largeTitle)
+                StepGlyph(size: 34)
                     .foregroundStyle(Color(red: 0.906, green: 0.533, blue: 0.573))
                 Text("Capture a thought")
                     .font(.footnote)
@@ -79,6 +89,8 @@ struct CaptureControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "com.shashankkarpal.ledge.capturecontrol") {
             ControlWidgetButton(action: LaunchCaptureIntent()) {
+                // ControlWidgetButton labels only accept SF Symbols, so this stays a
+                // system symbol until the Step ships as a custom symbol.
                 Label("Capture to Ledge", systemImage: "sidebar.right")
             }
         }
