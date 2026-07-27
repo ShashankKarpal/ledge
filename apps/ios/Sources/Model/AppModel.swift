@@ -200,8 +200,13 @@ final class AppModel: ObservableObject {
 
     private func heartbeatTick() {
         guard let store, isConnected else { return }
+        // Out-of-app captures (Back Tap, Lock Screen, share sheet, watch relay)
+        // land in the spool or the local pending queue, not the inbox, so the
+        // heartbeat watches all three. readString also nudges iCloud downloads.
+        if SpoolWriter.pendingContents() != nil { flushPending() }
+        let spool = ((try? store.readString(store.spoolURL)) ?? nil) ?? ""
         let raw = ((try? store.readString(store.inboxURL)) ?? nil) ?? ""
-        if raw == lastSeenDiskRaw { return }
+        if raw == lastSeenDiskRaw && LedgeFormat.trimEdges(spool).isEmpty { return }
         lastSeenDiskRaw = raw
         refresh()
     }
