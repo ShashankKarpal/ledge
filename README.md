@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="design/github/banner-dark.png">
+    <img alt="Ledge" src="design/github/banner-light.png" width="620">
+  </picture>
+</p>
+
 # Ledge
 
 A free, open-source, local-only, ADHD-first sidebar notepad for Mac, iPhone, and iPad.

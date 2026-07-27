@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 210" width="260" height="210" role="img" aria-label="Ledge"><title>Ledge</title><g transform="translate(82,10)"><path d="M 28,20 L 38,20 A 6,6 0 0 1 44,26 L 44,43 A 5,5 0 0 0 49,48 L 68,48 A 6,6 0 0 1 74,54 L 74,70 A 6,6 0 0 1 68,76 L 28,76 A 6,6 0 0 1 22,70 L 22,26 A 6,6 0 0 1 28,20 Z" fill="#F7F5F2"/><circle cx="59" cy="41.0" r="7" fill="#E78892"/></g><g transform="translate(28,118) scale(0.62)"><g fill="none" stroke="#F7F5F2" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+<path d="M 12,14 L 12,100"/>
+<path d="M 88,70 L 40,70"/><path d="M 88,70 A 24,24 0 1 0 82.4,85.4"/>
+<path d="M 164,70 A 24,24 0 1 1 116,70 A 24,24 0 1 1 164,70"/><path d="M 164,14 L 164,100"/>
+<path d="M 240,70 A 24,24 0 1 1 192,70 A 24,24 0 1 1 240,70"/>
+<path d="M 240,40 L 240,108 C 240,122 228,128 214,122"/>
+<path d="M 316,70 L 268,70"/><path d="M 316,70 A 24,24 0 1 0 310.4,85.4"/>
+</g></g></svg>

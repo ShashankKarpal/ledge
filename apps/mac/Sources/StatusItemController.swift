@@ -20,10 +20,13 @@ final class StatusItemController: NSObject {
         super.init()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(
-            systemSymbolName: "sidebar.right",
-            accessibilityDescription: "Ledge"
-        )
+        // The Step mark, monochrome template. macOS inverts it for the
+        // menu bar appearance; the SF Symbol stays as a build-order fallback.
+        let icon = NSImage(named: "MenuBarIconTemplate")
+            ?? NSImage(systemSymbolName: "sidebar.right", accessibilityDescription: "Ledge")
+        icon?.isTemplate = true
+        icon?.accessibilityDescription = "Ledge"
+        statusItem.button?.image = icon
         statusItem.button?.target = self
         statusItem.button?.action = #selector(clicked)
         statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
