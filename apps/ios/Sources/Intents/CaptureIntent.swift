@@ -12,7 +12,7 @@ struct CaptureIntent: AppIntent {
     static var description = IntentDescription("Adds a thought to your Ledge inbox.")
     static var openAppWhenRun: Bool = false
 
-    @Parameter(title: "Thought")
+    @Parameter(title: "Thought", requestValueDialog: "What's the thought?")
     var text: String
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
