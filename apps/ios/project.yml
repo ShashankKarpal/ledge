@@ -118,3 +118,11 @@ targets:
         CFBundleDisplayName: Ledge
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
+
+schemes:
+  Ledge:
+    build:
+      targets:
+        Ledge: all
+    run:
+      config: Debug
