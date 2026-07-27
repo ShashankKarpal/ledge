@@ -45,6 +45,32 @@ The first launch creates your notes folder at `~/Library/Mobile Documents/com~ap
 2. For the full app: `brew install xcodegen`, then `cd apps/ios && xcodegen generate`, open `Ledge.xcodeproj` in Xcode, select your personal team (free Apple ID works), and run on your device. On first launch, pick your Ledge folder in the folder picker (choose the one in iCloud Drive so Mac and iPhone share notes).
 3. Free-tier signing expires every 7 days; the capture net keeps working regardless. An Apple Developer Program membership extends signing to a year and enables TestFlight/App Store.
 
+## Deploying to your own devices
+
+One command builds and installs everything:
+
+```bash
+./scripts/deploy.sh          # Mac, iPhone, and Apple Watch
+./scripts/deploy.sh mac      # Mac only
+./scripts/deploy.sh phone    # iPhone only
+./scripts/deploy.sh watch    # Apple Watch only
+./scripts/deploy.sh ios      # iPhone and Apple Watch
+```
+
+It finds your devices itself, regenerates the Xcode project, builds, and
+installs. The watch install retries four times, because the Mac to watch
+tunnel frequently fails once and then succeeds.
+
+**Do not reinstall the watch app using the toggle in the Watch app on your
+iPhone.** That route is for App Store builds; on a development build it fails
+with "This app could not be installed at this time". Switching the toggle off
+also uninstalls the app from your watch. Run `./scripts/deploy.sh watch`
+instead.
+
+If the watch install fails every attempt, it is almost always Wi-Fi: the watch
+must be on the same network as the Mac, not a guest or IoT band, and the
+router must not have client isolation enabled.
+
 ## Where your notes live (privacy)
 
 At rest: plain `.md` files in your Ledge folder (iCloud Drive or local). Nothing else, nowhere else. No accounts, no analytics, no network calls except iCloud's own file sync performed by the OS. For stronger cloud encryption enable Advanced Data Protection on your Apple ID, or point Ledge at a local folder for zero cloud presence. The `.ledge/` subfolder holds a disposable search index and settings; delete it any time, it rebuilds.
