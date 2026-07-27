@@ -42,7 +42,7 @@ targets:
         CURRENT_PROJECT_VERSION: 1
         SWIFT_VERSION: "5.0"
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: AZ6474QK2C
+        DEVELOPMENT_TEAM: GZAN9987X2
     info:
       path: Sources/Info.plist
       properties:
@@ -86,7 +86,7 @@ targets:
         CURRENT_PROJECT_VERSION: 1
         SWIFT_VERSION: "5.0"
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: AZ6474QK2C
+        DEVELOPMENT_TEAM: GZAN9987X2
     info:
       path: WatchSources/Info.plist
       properties:
@@ -111,7 +111,7 @@ targets:
         CURRENT_PROJECT_VERSION: 1
         SWIFT_VERSION: "5.0"
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: AZ6474QK2C
+        DEVELOPMENT_TEAM: GZAN9987X2
     info:
       path: WidgetSources/Info.plist
       properties:
