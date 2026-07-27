@@ -49,6 +49,10 @@ Recommendation: bind Action Button AND Back Tap. Two reflexes, zero thought.
 
 Duplicate Shortcut 1 and replace **Ask for Input** with **Dictate Text**. Bind that one to the Action Button if voice beats typing for you. Transcription happens on device.
 
+## If you ever see: the file drop.md could not be opened
+
+The Append to Text File action stores a bookmark to the exact file you picked. Before v0.3.1 the apps truncated the spool by atomically replacing it, which gave drop.md a new identity and orphaned every existing bookmark; the shortcut then failed on every run. Since v0.3.1 all spool writes happen in place, so bookmarks stay valid forever. To heal a shortcut built before the fix: open the shortcut, tap the file chip inside Append to Text File, and re-pick Ledge > capture > drop.md once. Preferred setup now that the app carries a one-year signature: point Back Tap and the share sheet at the Capture to Ledge App Intent instead; it uses no file bookmark at all and falls back to a local pending queue when iCloud is unreachable.
+
 ## How it stays safe
 
 The shortcut only ever appends to `capture/drop.md`, never touches `inbox.md`. The apps drain the spool with a coordinated read, fold entries into the inbox with timestamps preserved, deduplicate, and truncate the spool. If iCloud is slow, captures wait in the spool file; nothing is lost. If the drop.md file is missing, Append to Text File creates it.

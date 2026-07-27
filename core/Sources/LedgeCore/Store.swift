@@ -84,7 +84,7 @@ public final class LedgeStore {
             }
         }
         if !fm.fileExists(atPath: spoolURL.path), !hasPlaceholder(spoolURL) {
-            try writeString("", to: spoolURL)
+            try writeStringInPlace("", to: spoolURL)
         }
     }
 
@@ -181,9 +181,9 @@ public final class LedgeStore {
     func truncateSpool(consumed: String) throws {
         let current = ((try? readString(spoolURL)) ?? nil) ?? consumed
         if current == consumed {
-            try writeString("", to: spoolURL)
+            try writeStringInPlace("", to: spoolURL)
         } else if current.hasPrefix(consumed) {
-            try writeString(String(current.dropFirst(consumed.count)), to: spoolURL)
+            try writeStringInPlace(String(current.dropFirst(consumed.count)), to: spoolURL)
         }
         // Anything else means the spool was rewritten underneath us: leave it
         // alone. Fold's day+minute+text dedupe makes the next drain harmless.
@@ -424,6 +424,46 @@ public final class LedgeStore {
         if let error = coordinationError { throw error }
         #else
         try string.write(to: url, atomically: true, encoding: .utf8)
+        #endif
+    }
+
+    /// Write preserving the file's on-disk identity. Out-of-process bookmarks
+    /// (like the Shortcuts "Append to Text File" action pointing at the spool)
+    /// survive only if the file is never atomically replaced, so this truncates
+    /// and rewrites the existing file in place, creating it when missing.
+    /// Use for capture/drop.md; inbox and attic keep atomic writes.
+    public func writeStringInPlace(_ string: String, to url: URL) throws {
+        try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let data = Data(string.utf8)
+        #if canImport(Darwin)
+        var coordinationError: NSError?
+        var writeError: Error?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: &coordinationError) { actualURL in
+            do {
+                if fm.fileExists(atPath: actualURL.path) {
+                    let handle = try FileHandle(forWritingTo: actualURL)
+                    defer { try? handle.close() }
+                    try handle.truncate(atOffset: 0)
+                    try handle.write(contentsOf: data)
+                    try handle.synchronize()
+                } else {
+                    try data.write(to: actualURL, options: [])
+                }
+            } catch {
+                writeError = error
+            }
+        }
+        if let error = writeError { throw error }
+        if let error = coordinationError { throw error }
+        #else
+        if fm.fileExists(atPath: url.path) {
+            let handle = try FileHandle(forWritingTo: url)
+            defer { try? handle.close() }
+            try handle.truncate(atOffset: 0)
+            try handle.write(contentsOf: data)
+        } else {
+            try data.write(to: url, options: [])
+        }
         #endif
     }
 

@@ -53,7 +53,7 @@ enum SpoolWriter {
             var combined = existing
             if !combined.isEmpty && !combined.hasSuffix("\n") { combined += "\n" }
             combined += line + "\n"
-            try store.writeString(combined, to: store.spoolURL)
+            try store.writeStringInPlace(combined, to: store.spoolURL)
         } catch {
             appendToPending(line)
         }

@@ -167,7 +167,7 @@ final class AppModel: ObservableObject {
             if !combined.isEmpty && !combined.hasSuffix("\n") { combined += "\n" }
             combined += pending
             if !combined.hasSuffix("\n") { combined += "\n" }
-            try store.writeString(combined, to: store.spoolURL)
+            try store.writeStringInPlace(combined, to: store.spoolURL)
             SpoolWriter.clearPending()
         } catch {
             notice = "Some captures are still in the local queue. They flush on the next refresh."
