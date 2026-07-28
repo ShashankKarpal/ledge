@@ -75,11 +75,11 @@ design/
     favicon.svg, favicon.ico, favicon-16/32/48.png
     apple-touch-icon.png (180)
     icon-192.png, icon-512.png, icon-512-maskable.png
-    og-image.png (1200x630)
+    og-1200x630.png (1200x630)
   github/
-    social-preview.png (1280x640)     upload in repo Settings > Social preview
+    social-preview-1280x640.png (1280x640)     upload in repo Settings > Social preview
     avatar.png (400x400)
-    banner-light.png, banner-dark.png (1400x400)
+    readme-banner-light-1400x400.png, readme-banner-dark-1400x400.png (1400x400)
 
 apps/mac/Resources/
   Ledge.iconset/                      10 PNGs, compiled to .icns at build time

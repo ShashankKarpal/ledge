@@ -1,104 +1,141 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="design/github/banner-dark.png">
-    <img alt="Ledge" src="design/github/banner-light.png" width="620">
+    <source media="(prefers-color-scheme: dark)"  srcset="design/github/readme-banner-dark-1400x400.png">
+    <source media="(prefers-color-scheme: light)" srcset="design/github/readme-banner-light-1400x400.png">
+    <img alt="Ledge" src="design/github/readme-banner-dark-1400x400.png" width="680">
   </picture>
 </p>
 
-# Ledge
+<h1 align="center">Ledge</h1>
 
-A free, open-source, local-only, ADHD-first sidebar notepad for Mac, iPhone, and iPad.
+<p align="center"><b>An ADHD-first sidebar notepad for Mac, iPhone, iPad, and Apple Watch. Free, open source, local only.</b></p>
 
-**Built by Claude (Anthropic).** This app was designed and written end to end by Claude, from the research and architecture spec through every line of code, at the direction of Shashank Karpal. That is not a footnote, it is the project's origin story.
+<p align="center">
+  <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20iOS%20%C2%B7%20watchOS-BD4753?style=flat-square">
+  <img alt="Status" src="https://img.shields.io/badge/status-v0.3.1-BD4753?style=flat-square">
+  <img alt="Local only" src="https://img.shields.io/badge/local-only-BD4753?style=flat-square">
+  <img alt="Stack" src="https://img.shields.io/badge/built%20with-Swift-1C1B1D?style=flat-square">
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-1C1B1D?style=flat-square"></a>
+</p>
 
-## What it is
+## What it does
 
-Ledge lives at the edge of your Mac screen. One hotkey (Option+Space by default) slides it in with the cursor already blinking on a fresh, timestamped entry in a single inbox. Esc tucks it away. No titles, no folders, no filing decisions, no accounts, no telemetry, no red badges, no streaks. Your notes are plain Markdown files in a folder you can see, open in any editor, and sync for free through iCloud Drive.
+- Slides in from the edge of the screen on one hotkey, cursor already blinking on a fresh timestamped entry.
+- Saves every thought as plain Markdown in a folder you own.
+- Syncs across Mac, iPhone, iPad, and Apple Watch through iCloud Drive, with no account.
+- Captures from Siri, Shortcuts, and the Watch, so a thought lands even when the app is not open.
+- Resurfaces unchecked items instead of letting them disappear.
+- Asks for no filing decisions: no titles, no folders, no tags, no streaks.
 
-The design constraint is ADHD-C. Every decision is tested against: reduce capture friction to near zero, minimize decisions, prevent lost thoughts, avoid overwhelm, make re-finding effortless, nudge gently or not at all. The full rationale lives in `docs/spec.md`.
+## Features
 
-## The pieces
+### Capture
 
-| Piece | What it does |
-|---|---|
-| `core/` | LedgeCore, a Swift package: the file format, inbox engine, spool drain, fuzzy search, Attic aging, Open Loops scanner. Pure Foundation, fully unit tested. |
-| `apps/mac/` | The Mac sidebar app. AppKit + Carbon hotkey + non-activating panel. Builds with one script, no Xcode project needed. |
-| `apps/ios/` | iPhone and iPad app (SwiftUI) plus the watchOS capture relay. Generated with XcodeGen. |
-| `shortcuts/` | The capture net: an iPhone/iPad Shortcuts recipe that appends to your inbox even when no app is installed or signed. |
-| `docs/` | The architecture spec and the normative file-format contract. |
+- **Option+Space anywhere.** Non-activating panel, so the app you were in keeps focus.
+- **Timestamped by default.** Day heading and time heading written automatically, newest first.
+- **Esc tucks away.** Autosaves, and removes an untouched empty entry.
+- **Siri capture.** Invoking without text prompts "What is the thought".
+- **Shortcuts capture net.** Appends to `capture/drop.md` even with no app installed or signed.
+- **Watch dictation.** Captures from the wrist and relays through the phone.
+- **Spool writer.** Out-of-app captures are queued and folded into the inbox automatically.
+- **Device attribution.** Every entry records the device it came from.
 
-## Quick start, Mac (5 minutes)
+### Find and follow up
 
-Requires: macOS 13+, Xcode Command Line Tools (`xcode-select --install`).
+- **Fuzzy search, recency weighted.** Cmd+K.
+- **Open Loops.** Cmd+L lists every unchecked box, grouped by age.
+- **Notes list.** Cmd+P.
+- **Named notes.** Cmd+N when an entry deserves its own file.
+- **Attic aging.** Older entries move aside without being deleted.
+- **Checkbox toggling.** Click to complete, in place.
+
+### Surfaces
+
+- **Menu bar item** with a custom template glyph.
+- **Home Screen and Lock Screen widgets** carrying the Step mark.
+- **Live heartbeat.** Watches the spool and pending queue so out-of-app captures appear without a refresh.
+
+### File format
+
+- **Plain Markdown.** Days newest first, entries newest first, timestamps automatic.
+- **No lock-in.** Any Markdown editor reads and writes these files.
+- **Disposable index.** `.ledge/` holds search index and settings; delete it any time and it rebuilds.
+
+## Stack
+
+- Core: Swift package (`LedgeCore`), pure Foundation, unit tested
+- Mac: AppKit, Carbon hotkey, non-activating panel
+- iOS and iPadOS: SwiftUI, generated with XcodeGen
+- watchOS: SwiftUI capture relay
+- Sync: iCloud Drive documents, no server
+
+## Install
+
+Requires: macOS 13 or later, Xcode Command Line Tools (`xcode-select --install`).
 
 ```bash
+git clone https://github.com/ShashankKarpal/ledge.git
 cd ledge
-./scripts/build-mac.sh          # compiles LedgeCore + the app, assembles build/Ledge.app
-open build/Ledge.app            # menu bar icon appears; press Option+Space
+./scripts/build-mac.sh
+open build/Ledge.app
 ```
 
-The first launch creates your notes folder at `~/Library/Mobile Documents/com~apple~CloudDocs/Ledge` (iCloud Drive) or `~/Documents/Ledge` if iCloud Drive is unavailable. To start at login: System Settings > General > Login Items > add Ledge.app.
+First launch creates the notes folder at `~/Library/Mobile Documents/com~apple~CloudDocs/Ledge`, or `~/Documents/Ledge` if iCloud Drive is unavailable.
 
-## Quick start, iPhone/iPad
+For iPhone, iPad, and Watch: `brew install xcodegen`, then `cd apps/ios && xcodegen generate`, open the project in Xcode, select your team, and run. Or use `./scripts/deploy.sh` to build and install on every connected device at once.
 
-1. Set up the capture net first (works today, no app needed): see `shortcuts/README.md`. It appends captures to `capture/drop.md` in your Ledge folder; the apps fold them into the inbox automatically.
-2. For the full app: `brew install xcodegen`, then `cd apps/ios && xcodegen generate`, open `Ledge.xcodeproj` in Xcode, select your personal team (free Apple ID works), and run on your device. On first launch, pick your Ledge folder in the folder picker (choose the one in iCloud Drive so Mac and iPhone share notes).
-3. Free-tier signing expires every 7 days; the capture net keeps working regardless. An Apple Developer Program membership extends signing to a year and enables TestFlight/App Store.
-
-## Deploying to your own devices
-
-One command builds and installs everything:
-
-```bash
-./scripts/deploy.sh          # Mac, iPhone, and Apple Watch
-./scripts/deploy.sh mac      # Mac only
-./scripts/deploy.sh phone    # iPhone only
-./scripts/deploy.sh watch    # Apple Watch only
-./scripts/deploy.sh ios      # iPhone and Apple Watch
-```
-
-It finds your devices itself, regenerates the Xcode project, builds, and
-installs. The watch install retries four times, because the Mac to watch
-tunnel frequently fails once and then succeeds.
-
-**Do not reinstall the watch app using the toggle in the Watch app on your
-iPhone.** That route is for App Store builds; on a development build it fails
-with "This app could not be installed at this time". Switching the toggle off
-also uninstalls the app from your watch. Run `./scripts/deploy.sh watch`
-instead.
-
-If the watch install fails every attempt, it is almost always Wi-Fi: the watch
-must be on the same network as the Mac, not a guest or IoT band, and the
-router must not have client isolation enabled.
-
-## Where your notes live (privacy)
-
-At rest: plain `.md` files in your Ledge folder (iCloud Drive or local). Nothing else, nowhere else. No accounts, no analytics, no network calls except iCloud's own file sync performed by the OS. For stronger cloud encryption enable Advanced Data Protection on your Apple ID, or point Ledge at a local folder for zero cloud presence. The `.ledge/` subfolder holds a disposable search index and settings; delete it any time, it rebuilds.
-
-## Keyboard map (Mac)
+## Usage
 
 | Key | Action |
 |---|---|
-| Option+Space | Summon / dismiss the sidebar |
-| Esc | Tuck away (autosaves, removes an untouched empty entry) |
-| Cmd+K | Search (fuzzy, recency-weighted) |
-| Cmd+L | Open Loops (every unchecked box, grouped by age) |
+| Option+Space | Summon or dismiss the sidebar |
+| Esc | Tuck away |
+| Cmd+K | Search |
+| Cmd+L | Open Loops |
 | Cmd+P | Notes list |
 | Cmd+N | New named note |
-| Click a checkbox | Toggle it |
 
-## The file format (yours forever)
-
-```
-## 2026-07-19
-### 09:42
-The thought, exactly as it fell out.
-
-- [ ] a loop Ledge will gently resurface
+```bash
+./scripts/deploy.sh          # Mac, iPhone, and Watch
+./scripts/deploy.sh mac      # Mac only
+./scripts/deploy.sh watch    # Watch only
 ```
 
-Days newest-first, entries newest-first, timestamps automatic. The full contract is in `docs/file-format.md`. Any Markdown editor can read and write these files; Ledge never locks you in.
+Do not reinstall the Watch app from the iPhone Watch app toggle. That path is for App Store builds; on a development build it fails, and switching it off uninstalls the app. Use `./scripts/deploy.sh watch`.
 
-## License and credit
+## Project structure
 
-MIT. Built by Claude (Anthropic Claude, Fable/Opus class models) with Shashank Karpal as director and first user. If you fork this, keep the attribution line in the About screen honest about what wrote it.
+```
+core/           LedgeCore: file format, inbox, spool, search, Attic, Open Loops
+apps/mac/       Mac sidebar app
+apps/ios/       iPhone and iPad app, plus the watchOS relay
+shortcuts/      the Shortcuts capture recipe
+design/         brand assets, tokens, BRAND.md
+docs/           architecture spec and the file-format contract
+scripts/        build and deploy
+```
+
+## Roadmap
+
+| Version | Goal | Status |
+|---|---|---|
+| v0.2 | Sync hardening, device attribution, live heartbeats | Shipped |
+| v0.3 | Capture everywhere: Siri, Shortcuts, Watch | Shipped |
+| v0.3.1 | Widgets and the Step identity across every surface | Shipped |
+
+## Privacy
+
+- Plain Markdown files in a folder you own. Nothing else.
+- No accounts, no analytics, no telemetry.
+- No network calls beyond iCloud's own file sync, performed by the OS.
+- Enable Advanced Data Protection for stronger cloud encryption, or point Ledge at a local folder for zero cloud presence.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+## Author
+
+Built by Shashank Karpal.
+
+> Designed and built by Claude (Anthropic), from the research and architecture spec through every line of code. The product direction and the daily use are Shashank Karpal's; the architecture and the code are Claude's. If you fork this, keep the attribution line in the About screen honest about what wrote it.
