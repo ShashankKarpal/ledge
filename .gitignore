@@ -18,3 +18,27 @@ local_settings.py
 *.p12
 *.mobileprovision
 .env
+
+# --- hardening baseline (audit 2026-07-28) ---
+secrets.*
+credentials.*
+config.json
+/tokens.json
+*.token
+*.key
+*.pem
+*.pfx
+*.keystore
+*.jks
+id_rsa
+id_ed25519
+id_ecdsa
+.aws/
+service-account*.json
+*.db
+*.sqlite
+*.sqlite3
+*.log
+*.bak
+__pycache__/
+*.pyc
