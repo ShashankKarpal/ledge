@@ -71,7 +71,21 @@
 
 ## Install
 
-Requires: macOS 13 or later, Xcode Command Line Tools (`xcode-select --install`).
+### Mac, no tools needed
+
+Download `Ledge-v0.2.0-macOS.zip` from [Releases](https://github.com/ShashankKarpal/ledge/releases/latest), unzip, and move `Ledge.app` to `/Applications`. Signed with an Apple Developer ID and notarized by Apple, so it opens without Gatekeeper warnings. Requires macOS 13 or later.
+
+Verify it yourself:
+
+    ditto -x -k Ledge-v0.2.0-macOS.zip .
+    xcrun stapler validate Ledge.app
+    spctl -a -vvv Ledge.app
+
+Expect `source=Notarized Developer ID`.
+
+### Mac, build from source
+
+Requires the Xcode Command Line Tools (`xcode-select --install`).
 
 ```bash
 git clone https://github.com/ShashankKarpal/ledge.git
