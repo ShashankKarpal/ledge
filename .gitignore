@@ -42,3 +42,7 @@ service-account*.json
 *.bak
 __pycache__/
 *.pyc
+
+# --- secrets hygiene completion (audit 2026-07-30) ---
+.env.*
+!.env.example
