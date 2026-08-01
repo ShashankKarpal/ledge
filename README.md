@@ -31,13 +31,17 @@
 
 <table>
 <tr>
-<td width="50%" align="center">
-<img alt="Ledge sidebar on macOS" src="design/screenshots/mac-inbox.png" width="300"><br>
+<td width="33%" align="center">
+<img alt="Ledge sidebar on macOS" src="design/screenshots/mac-inbox.png" width="220"><br>
 <sub><b>The sidebar.</b> Option+Space, and the cursor is already sitting on a fresh timestamped entry. Every capture carries the device it came from.</sub>
 </td>
-<td width="50%" align="center">
-<img alt="Open Loops on macOS" src="design/screenshots/mac-open-loops.png" width="300"><br>
+<td width="33%" align="center">
+<img alt="Open Loops on macOS" src="design/screenshots/mac-open-loops.png" width="220"><br>
 <sub><b>Open Loops, Cmd+L.</b> Every unchecked box you ever wrote, grouped by age, so nothing quietly disappears.</sub>
+</td>
+<td width="33%" align="center">
+<img alt="Search on macOS" src="design/screenshots/mac-search.png" width="220"><br>
+<sub><b>Search, Cmd+K.</b> Fuzzy and recency weighted, across every day and every device. No folders to remember.</sub>
 </td>
 </tr>
 </table>
