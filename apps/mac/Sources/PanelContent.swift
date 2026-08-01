@@ -56,6 +56,11 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
         textView = EditorTextView.make()
         textView.delegate = self
         textView.onCheckboxToggle = { [weak self] in self?.scheduleSave() }
+        textView.assetsDirectory = { [weak self] in
+            guard let self else { return nil }
+            return self.store.inboxURL.deletingLastPathComponent()
+                .appendingPathComponent("assets", isDirectory: true)
+        }
 
         scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
@@ -152,10 +157,44 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
             if drained > 0 {
                 headerLabel.stringValue = "Inbox · \(drained) folded in from your devices"
             }
+            maybeShowMorningLedge()
         } catch {
             headerLabel.stringValue = "Inbox · could not read the notes folder"
             headerLabel.textColor = Theme.attention
         }
+    }
+
+    // MARK: Morning Ledge
+
+    private static let morningShownKey = "ledge.morningShownDay"
+
+    /// On the first summon of a new day, surface where you left off. Once per
+    /// day, only when something is actually open, dismissed by Esc or one click.
+    private func maybeShowMorningLedge() {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        let today = formatter.string(from: Date())
+        guard UserDefaults.standard.string(forKey: Self.morningShownKey) != today else { return }
+        UserDefaults.standard.set(today, forKey: Self.morningShownKey)
+        let loops = store.openLoops(inbox: Inbox.parse(textView.string))
+        guard !loops.isEmpty else { return }
+        presentOverlay(AnyView(MorningOverlay(
+            store: store,
+            currentInbox: { [weak self] in Inbox.parse(self?.textView.string ?? "") },
+            onComplete: { [weak self] loop in self?.completeLoop(loop) },
+            onJump: { [weak self] loop in
+                if loop.fileURL == self?.store.inboxURL {
+                    self?.revealInInbox(snippet: "- [ ] " + loop.text)
+                } else {
+                    self?.openNote(loop.fileURL)
+                }
+            },
+            onStart: { [weak self] in
+                self?.closeOverlay()
+                self?.focusEditor()
+            }
+        )), title: "Morning Ledge")
     }
 
     /// Persist the current surface. Empty entries evaporate; nothing else is touched.

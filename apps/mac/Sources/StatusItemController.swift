@@ -10,13 +10,15 @@ final class StatusItemController: NSObject {
     private let togglePanel: () -> Void
     private let openFolder: () -> Void
     private let capture: (String) -> Bool
+    private let openSettings: () -> Void
     private var popover: NSPopover?
     private let menu = NSMenu()
 
-    init(togglePanel: @escaping () -> Void, openFolder: @escaping () -> Void, capture: @escaping (String) -> Bool) {
+    init(togglePanel: @escaping () -> Void, openFolder: @escaping () -> Void, capture: @escaping (String) -> Bool, openSettings: @escaping () -> Void) {
         self.togglePanel = togglePanel
         self.openFolder = openFolder
         self.capture = capture
+        self.openSettings = openSettings
         super.init()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -42,6 +44,10 @@ final class StatusItemController: NSObject {
         let folder = NSMenuItem(title: "Open Notes Folder in Finder", action: #selector(folderAction), keyEquivalent: "")
         folder.target = self
         menu.addItem(folder)
+
+        let prefs = NSMenuItem(title: "Settings\u{2026}", action: #selector(settingsAction), keyEquivalent: ",")
+        prefs.target = self
+        menu.addItem(prefs)
 
         menu.addItem(.separator())
 
@@ -104,5 +110,6 @@ final class StatusItemController: NSObject {
     @objc private func openAction() { togglePanel() }
     @objc private func miniAction() { togglePopover() }
     @objc private func folderAction() { openFolder() }
+    @objc private func settingsAction() { openSettings() }
     @objc private func quitAction() { NSApp.terminate(nil) }
 }

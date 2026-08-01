@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var syncWatcher: NSMetadataQuery?
     private var refreshWork: DispatchWorkItem?
     private var dragCapture: DragJiggleCaptureController?
+    private var settingsWindow: SettingsWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let root = LedgeStore.defaultRoot()
@@ -33,7 +34,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 NSWorkspace.shared.activateFileViewerSelecting([self.store.inboxURL])
             },
-            capture: { [weak self] text in self?.quickCapture(text) ?? false }
+            capture: { [weak self] text in self?.quickCapture(text) ?? false },
+            openSettings: { [weak self] in self?.showSettings() }
         )
 
         dragCapture = DragJiggleCaptureController(
@@ -92,6 +94,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         refreshWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
+    }
+
+    /// The Settings window. Changes save immediately, re-register the hotkey,
+    /// and resize the open panel live.
+    private func showSettings() {
+        if settingsWindow == nil {
+            settingsWindow = SettingsWindowController(settings: settings) { [weak self] newSettings in
+                guard let self else { return }
+                self.settings = newSettings
+                try? newSettings.save(to: self.store.settingsURL)
+                self.hotkey.register(newSettings.hotkey)
+                self.panelController.apply(newSettings)
+            }
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        settingsWindow?.showWindow(nil)
+        settingsWindow?.window?.center()
+        settingsWindow?.window?.makeKeyAndOrderFront(nil)
     }
 
     /// Shared quiet capture path for the mini-popover (A1) and the edge drop

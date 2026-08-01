@@ -9,6 +9,18 @@ import LedgeCore
 
 final class EditorTextView: NSTextView {
     var onCheckboxToggle: (() -> Void)?
+    /// Where pasted images are filed, provided by the content controller.
+    var assetsDirectory: (() -> URL?)?
+
+    /// Rich pasteboard content lands as Markdown; plain text passes through.
+    override func paste(_ sender: Any?) {
+        let pb = NSPasteboard.general
+        if let converted = PasteMarkdown.markdown(from: pb, assetsDirectory: assetsDirectory?()) {
+            insertText(converted, replacementRange: selectedRange())
+            return
+        }
+        super.paste(sender)
+    }
 
     static func make() -> EditorTextView {
         let textView = EditorTextView(frame: .zero)

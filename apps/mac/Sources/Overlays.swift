@@ -170,6 +170,106 @@ struct LoopsOverlay: View {
     }
 }
 
+// MARK: Morning Ledge
+
+/// First summon of the day: where you left off, calmly. No badges, no red,
+/// one click to start writing instead.
+struct MorningOverlay: View {
+    let store: LedgeStore
+    let currentInbox: () -> Inbox
+    let onComplete: (OpenLoop) -> Void
+    let onJump: (OpenLoop) -> Void
+    let onStart: () -> Void
+
+    @State private var refresh = UUID()
+
+    private var loops: [OpenLoop] {
+        _ = refresh
+        return store.openLoops(inbox: currentInbox())
+    }
+
+    private var startOfToday: Date { Calendar.current.startOfDay(for: Date()) }
+    private var startOfYesterday: Date { startOfToday.addingTimeInterval(-86_400) }
+
+    private func isFromYesterday(_ loop: OpenLoop) -> Bool {
+        guard let when = loop.when else { return false }
+        return when >= startOfYesterday && when < startOfToday
+    }
+
+    var body: some View {
+        let all = loops
+        let yesterday = all.filter { isFromYesterday($0) }
+        let earlier = all.filter { !isFromYesterday($0) }
+
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Where you left off. Nothing here is urgent.")
+                .font(.system(size: 12))
+                .foregroundColor(Color(nsColor: Theme.textMuted))
+
+            List {
+                if !yesterday.isEmpty {
+                    Section(header: sectionHeader("From yesterday")) {
+                        ForEach(yesterday) { loop in row(loop) }
+                    }
+                }
+                if !earlier.isEmpty {
+                    Section(header: sectionHeader("Still open, no judgment")) {
+                        ForEach(earlier) { loop in row(loop) }
+                    }
+                }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+
+            HStack {
+                Button("Start writing") { onStart() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color(nsColor: Theme.accent))
+                Spacer()
+                Text("Esc closes this")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color(nsColor: Theme.textAged))
+            }
+        }
+    }
+
+    private func sectionHeader(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(Color(nsColor: Theme.textAged))
+    }
+
+    private func row(_ loop: OpenLoop) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Button {
+                onComplete(loop)
+                refresh = UUID()
+            } label: {
+                Image(systemName: "square")
+                    .foregroundColor(Color(nsColor: Theme.accent))
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                onJump(loop)
+            } label: {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(loop.text)
+                        .font(.system(size: 13))
+                        .foregroundColor(Color(nsColor: Theme.text))
+                        .lineLimit(2)
+                    Text(loop.sourceLabel + " · " + relativeLabel(loop.when))
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(nsColor: Theme.textAged))
+                }
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
 // MARK: Notes
 
 struct NotesOverlay: View {

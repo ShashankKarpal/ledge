@@ -12,7 +12,7 @@
 
 <p align="center">
   <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20iOS%20%C2%B7%20watchOS-BD4753?style=flat-square">
-  <img alt="Status" src="https://img.shields.io/badge/status-v0.3.2-BD4753?style=flat-square">
+  <img alt="Status" src="https://img.shields.io/badge/status-v0.4.0-BD4753?style=flat-square">
   <img alt="Local only" src="https://img.shields.io/badge/local-only-BD4753?style=flat-square">
   <img alt="Stack" src="https://img.shields.io/badge/built%20with-Swift-1C1B1D?style=flat-square">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-1C1B1D?style=flat-square"></a>
@@ -88,11 +88,13 @@
 - **Watch dictation.** Captures from the wrist and relays through the phone.
 - **Spool writer.** Out-of-app captures are queued and folded into the inbox automatically.
 - **Device attribution.** Every entry records the device it came from.
+- **Paste as Markdown.** Rich text pasted into the Mac sidebar lands as clean Markdown: links, bold, italic, and lists survive, and pasted images are filed into `assets/` and referenced. Plain text stays plain.
 
 ### Find and follow up
 
 - **Fuzzy search, recency weighted.** Cmd+K.
 - **Open Loops.** Cmd+L lists every unchecked box, grouped by age.
+- **The Morning Ledge.** On the first summon of each day, a calm digest of where you left off: yesterday's open loops, then everything still open. One click or Esc and you are writing. No badges, no counts on icons, no red.
 - **Notes list.** Cmd+P.
 - **Named notes.** Cmd+N when an entry deserves its own file.
 - **Attic aging.** Older entries move aside without being deleted.
@@ -101,6 +103,7 @@
 ### Surfaces
 
 - **Menu bar item** with a custom template glyph.
+- **Settings window.** Hotkey, panel width, Attic timing, start at login. No more editing settings.json by hand.
 - **Home Screen and Lock Screen widgets** carrying the Step mark.
 - **Live heartbeat.** Watches the spool and pending queue so out-of-app captures appear without a refresh.
 
@@ -133,11 +136,11 @@ Apple platforms only, by design. Ledge is Swift and SwiftUI end to end, and it s
 
 ### Mac, no tools needed
 
-Download `Ledge-v0.3.2-macOS.zip` from [Releases](https://github.com/ShashankKarpal/ledge/releases/latest), unzip, and move `Ledge.app` to `/Applications`. Signed with an Apple Developer ID and notarized by Apple, so it opens without Gatekeeper warnings. Requires macOS 13 or later.
+Download `Ledge-v0.4.0-macOS.zip` from [Releases](https://github.com/ShashankKarpal/ledge/releases/latest), unzip, and move `Ledge.app` to `/Applications`. Signed with an Apple Developer ID and notarized by Apple, so it opens without Gatekeeper warnings. Requires macOS 13 or later.
 
 Verify it yourself:
 
-    ditto -x -k Ledge-v0.3.2-macOS.zip .
+    ditto -x -k Ledge-v0.4.0-macOS.zip .
     xcrun stapler validate Ledge.app
     spctl -a -vvv Ledge.app
 
@@ -197,7 +200,10 @@ scripts/        build and deploy
 | v0.3 | Capture everywhere: Siri, Shortcuts, Watch | Shipped |
 | v0.3.1 | Widgets and the Step identity across every surface | Shipped |
 | v0.3.2 | Notarized download matching the source, Edit menu so paste and copy work on the Mac | Shipped |
-| v0.4 | Paste as Markdown: rich text, links, and images pasted into Ledge land as clean Markdown | Planned |
+| v0.4 | Paste as Markdown, the Morning Ledge daily digest, a Settings window | Shipped |
+| v0.5 | Gentle one-shot reminders handed to Apple Reminders, an iOS Share Sheet extension, TestFlight beta | Next |
+| v0.6 | Optional local AI adapter (LM Studio, off by default) for inbox summaries and stale-loop surfacing, end-of-day sweep | Planned |
+| Later | Inline images, focus mode, App Store release, single-source version stamping in CI | Planned |
 
 ## Privacy
 

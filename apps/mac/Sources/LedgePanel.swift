@@ -14,7 +14,7 @@ final class LedgePanel: NSPanel {
 
 final class PanelController {
     private let store: LedgeStore
-    private let settings: LedgeSettings
+    private var settings: LedgeSettings
     private var panel: LedgePanel?
     private var refreshTimer: Timer?
     private var content: PanelContentViewController?
@@ -31,6 +31,15 @@ final class PanelController {
     }
 
     var isVisible: Bool { panel?.isVisible ?? false }
+
+    /// Live settings update from the Settings window. Width applies to the
+    /// open panel immediately and to every future summon.
+    func apply(_ newSettings: LedgeSettings) {
+        settings = newSettings
+        if let panel, panel.isVisible, !animating {
+            panel.setFrame(targetFrame(), display: true)
+        }
+    }
 
     /// Reload the open panel after iCloud pulled fresh bytes. Safe by design:
     /// the content view refuses unless the editor is clean.
