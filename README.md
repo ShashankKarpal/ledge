@@ -27,6 +27,51 @@
 - Resurfaces unchecked items instead of letting them disappear.
 - Asks for no filing decisions: no titles, no folders, no tags, no streaks.
 
+## Screenshots
+
+<table>
+<tr>
+<td width="50%" align="center">
+<img alt="Ledge sidebar on macOS" src="design/screenshots/mac-inbox.png" width="300"><br>
+<sub><b>The sidebar.</b> Option+Space, and the cursor is already sitting on a fresh timestamped entry. Every capture carries the device it came from.</sub>
+</td>
+<td width="50%" align="center">
+<img alt="Open Loops on macOS" src="design/screenshots/mac-open-loops.png" width="300"><br>
+<sub><b>Open Loops, Cmd+L.</b> Every unchecked box you ever wrote, grouped by age, so nothing quietly disappears.</sub>
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="33%" align="center">
+<img alt="Ledge on iPhone" src="design/screenshots/iphone-inbox.png" width="220"><br>
+<sub><b>iPhone.</b> The same inbox, the same file. Entries from the Mac and the Watch are already sitting there.</sub>
+</td>
+<td width="33%" align="center">
+<img alt="Ledge Home Screen widget" src="design/screenshots/iphone-widget-home.png" width="220"><br>
+<sub><b>Home Screen widget.</b> One tap from the Home Screen straight into a capture field.</sub>
+</td>
+<td width="33%" align="center">
+<img alt="Capturing with Back Tap" src="design/screenshots/iphone-back-tap.png" width="220"><br>
+<sub><b>Back Tap.</b> Double tap the back of the phone, type, done. The app never has to open.</sub>
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="50%" align="center">
+<img alt="Ledge on the Apple Watch app list" src="design/screenshots/watch-app-list.png" width="240"><br>
+<sub><b>Apple Watch.</b> On the wrist, where most thoughts actually arrive.</sub>
+</td>
+<td width="50%" align="center">
+<img alt="Capturing a thought on Apple Watch" src="design/screenshots/watch-capture.png" width="240"><br>
+<sub><b>Watch capture.</b> Dictate it, and it relays through the phone into the same inbox.</sub>
+</td>
+</tr>
+</table>
+
 ## Features
 
 ### Capture
@@ -68,6 +113,17 @@
 - iOS and iPadOS: SwiftUI, generated with XcodeGen
 - watchOS: SwiftUI capture relay
 - Sync: iCloud Drive documents, no server
+
+## Requirements
+
+Apple platforms only, by design. Ledge is Swift and SwiftUI end to end, and it syncs through iCloud Drive rather than a server, so there is no Android or Windows build and no plan for one.
+
+| Platform | Minimum |
+|---|---|
+| macOS | 13 |
+| iOS and iPadOS | 16 |
+| watchOS | 9 |
+| Home Screen and Lock Screen widgets | iOS 18 |
 
 ## Install
 

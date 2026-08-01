@@ -88,17 +88,35 @@ public final class LedgeStore {
         }
     }
 
+    // The onboarding entry written into a brand new inbox. Affordances differ by
+    // platform, so the copy does too: a Mac gets the keyboard shortcuts, a phone
+    // or watch gets the taps it actually has. Never teach a gesture the device
+    // does not have.
+    #if os(macOS)
     static let seedEntry = """
     Welcome to Ledge. This is your inbox: every thought lands here, newest at the top, timestamped for you.
 
     Try three things, then delete this entry:
 
-    - [ ] press Esc to tuck Ledge away, then summon it again
-    - [ ] click this checkbox
+    - [ ] press Esc to tuck Ledge away, then Option+Space to summon it again
+    - [ ] click this checkbox, then press Cmd+L to see every box still open
     - [ ] type anything below the timestamp that appeared
 
-    No folders, no titles, no filing. Search (Cmd+K) finds everything later.
+    No folders, no titles, no filing. Cmd+K finds everything later, and none of it leaves your devices.
     """
+    #else
+    static let seedEntry = """
+    Welcome to Ledge. This is your inbox: every thought lands here, newest at the top, timestamped for you.
+
+    Try three things, then delete this entry:
+
+    - [ ] type a thought into the capture field at the top
+    - [ ] tap this checkbox, then open Open loops to see the ones still waiting
+    - [ ] add the Ledge widget to your Home Screen for one-tap capture
+
+    No folders, no titles, no filing. Search finds everything later, and none of it leaves your devices.
+    """
+    #endif
 
     // MARK: Inbox
 
