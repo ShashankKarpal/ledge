@@ -5,6 +5,10 @@
 # com.shashankkarpal.ledge.watchkitapp) to something unique before building on a
 # free personal team. Keep the watch id as "<your iOS id>.watchkitapp" and
 # keep WKCompanionAppBundleIdentifier equal to your iOS id.
+#
+# Signing: no DEVELOPMENT_TEAM is set here. After xcodegen generate, pick your
+# team in Xcode (Signing & Capabilities) on each target, or add
+# DEVELOPMENT_TEAM: YOURTEAMID under each target's settings.base below.
 
 name: Ledge
 
@@ -43,7 +47,6 @@ targets:
         CURRENT_PROJECT_VERSION: 1
         SWIFT_VERSION: "5.0"
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: GZAN9987X2
     info:
       path: Sources/Info.plist
       properties:
@@ -90,7 +93,6 @@ targets:
         CURRENT_PROJECT_VERSION: 1
         SWIFT_VERSION: "5.0"
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: GZAN9987X2
     info:
       path: WatchSources/Info.plist
       properties:
@@ -117,7 +119,6 @@ targets:
         CURRENT_PROJECT_VERSION: 1
         SWIFT_VERSION: "5.0"
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: GZAN9987X2
     info:
       path: WidgetSources/Info.plist
       properties:
