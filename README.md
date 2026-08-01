@@ -143,6 +143,8 @@ Verify it yourself:
 
 Expect `source=Notarized Developer ID`.
 
+> **Note on versions.** v0.2.0 is the newest *notarized download*. The source tree is at v0.3.1, which adds Siri and Shortcuts capture, the Watch relay, and widgets. To get those today, build from source below. A notarized v0.3.1 build is the next thing to ship.
+
 ### Mac, build from source
 
 Requires the Xcode Command Line Tools (`xcode-select --install`).
@@ -182,9 +184,9 @@ Do not reinstall the Watch app from the iPhone Watch app toggle. That path is fo
 ```
 core/           LedgeCore: file format, inbox, spool, search, Attic, Open Loops
 apps/mac/       Mac sidebar app
-apps/ios/       iPhone and iPad app, plus the watchOS relay
+apps/ios/       iPhone and iPad app, the watchOS relay, and the widgets
 shortcuts/      the Shortcuts capture recipe
-design/         brand assets, tokens, BRAND.md
+design/         brand assets, tokens, screenshots, BRAND.md
 docs/           architecture spec and the file-format contract
 scripts/        build and deploy
 ```
@@ -196,6 +198,7 @@ scripts/        build and deploy
 | v0.2 | Sync hardening, device attribution, live heartbeats | Shipped |
 | v0.3 | Capture everywhere: Siri, Shortcuts, Watch | Shipped |
 | v0.3.1 | Widgets and the Step identity across every surface | Shipped |
+| v0.3.2 | Notarized v0.3.1 download, so the release matches the source | Next |
 
 ## Privacy
 
