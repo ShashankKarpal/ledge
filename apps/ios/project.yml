@@ -48,6 +48,8 @@ targets:
       path: Sources/Info.plist
       properties:
         CFBundleDisplayName: Ledge
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchScreen: {}
         CFBundleURLTypes:
           - CFBundleURLName: com.shashankkarpal.ledge
@@ -93,6 +95,8 @@ targets:
       path: WatchSources/Info.plist
       properties:
         CFBundleDisplayName: Ledge
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         WKApplication: true
         WKCompanionAppBundleIdentifier: com.shashankkarpal.ledge
         WKWatchOnly: false
@@ -118,6 +122,8 @@ targets:
       path: WidgetSources/Info.plist
       properties:
         CFBundleDisplayName: Ledge
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
 
