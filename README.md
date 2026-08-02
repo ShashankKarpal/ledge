@@ -12,7 +12,7 @@
 
 <p align="center">
   <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20iOS%20%C2%B7%20watchOS-BD4753?style=flat-square">
-  <img alt="Status" src="https://img.shields.io/badge/status-v0.4.0-BD4753?style=flat-square">
+  <img alt="Status" src="https://img.shields.io/badge/status-v0.4.1-BD4753?style=flat-square">
   <img alt="Local only" src="https://img.shields.io/badge/local-only-BD4753?style=flat-square">
   <img alt="Stack" src="https://img.shields.io/badge/built%20with-Swift-1C1B1D?style=flat-square">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-1C1B1D?style=flat-square"></a>
@@ -136,11 +136,11 @@ Apple platforms only, by design. Ledge is Swift and SwiftUI end to end, and it s
 
 ### Mac, no tools needed
 
-Download `Ledge-v0.4.0-macOS.zip` from [Releases](https://github.com/ShashankKarpal/ledge/releases/latest), unzip, and move `Ledge.app` to `/Applications`. Signed with an Apple Developer ID and notarized by Apple, so it opens without Gatekeeper warnings. Requires macOS 13 or later.
+Download `Ledge-v0.4.1-macOS.zip` from [Releases](https://github.com/ShashankKarpal/ledge/releases/latest), unzip, and move `Ledge.app` to `/Applications`. Signed with an Apple Developer ID and notarized by Apple, so it opens without Gatekeeper warnings. Requires macOS 13 or later.
 
 Verify it yourself:
 
-    ditto -x -k Ledge-v0.4.0-macOS.zip .
+    ditto -x -k Ledge-v0.4.1-macOS.zip .
     xcrun stapler validate Ledge.app
     spctl -a -vvv Ledge.app
 
