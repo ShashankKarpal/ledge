@@ -10,7 +10,7 @@ jobs:
     name: LedgeCore tests
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Run unit tests
         run: swift test --package-path core
 
@@ -18,7 +18,7 @@ jobs:
     name: Mac app builds
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Build Ledge.app
         run: bash scripts/build-mac.sh
       - name: Upload app artifact
