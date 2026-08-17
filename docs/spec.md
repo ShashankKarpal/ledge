@@ -1,5 +1,14 @@
 # Ledge: ADHD-First Sidebar Notepad, Architecture and Spec (v1.1)
 
+> **Correction, 2026-08-17.** The signing and distribution status recorded below is
+> out of date. Sections 4.1 to 4.4, the free-provisioning and AltStore findings, and
+> the M4 signing note are historical: the maintainer has been on the paid Apple
+> Developer Program since 2026-07-27, with one-year provisioning profiles, so there
+> is no seven day re-signing and no free-tier constraint on the maintainer's builds.
+> The free-tier path is kept only so forkers without a membership can still build
+> and sideload. See CLAUDE.md, "Signing and distribution reality". Everything else
+> in this document still stands.
+
 Working title: **Ledge** (a note resting on the ledge of your screen). Verify name collisions before public release. Alternates: Sliver, Margin.
 
 | | |

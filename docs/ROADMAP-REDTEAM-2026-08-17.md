@@ -16,7 +16,7 @@ Recovered verbatim where possible, with sources.
 | v0.6 | "Optional local AI adapter (LM Studio, off by default) for inbox summaries and stale-loop surfacing, end-of-day sweep" | Planned |
 | Later | "Inline images, focus mode, App Store release, single-source version stamping in CI" | Planned |
 
-**Session-log restatement** (_claude-chats/kk1/2026-08-01_1839_kk1-cowork_ledge-v040-release-audit.md, open threads 3 to 5): same three tiers, with the added rationale that TestFlight is "the item that removes the seven day re-signing wall".
+**Session-log restatement** (_claude-chats/kk1/2026-08-01_1839_kk1-cowork_ledge-v040-release-audit.md, open threads 3 to 5): same three tiers, with the added rationale that TestFlight is "the item that removes the seven day re-signing wall" (a wall that no longer exists on the maintainer's paid membership; see Pass 2, item 4).
 
 **Spec backlog** (docs/spec.md section 8): M5 rich layer (inline images, KaTeX and mermaid, PDF export, floating windows, focus mode, slash menu, /timer, Vision OCR indexing); M6 optional AI (localhost adapter, tag suggest, summarize, brain-dump-to-checklist, search rerank, FoundationModels probe). The v1 knowledge dump section 7 adds: end-of-day sweep, context breadcrumb, hyperfocus breadcrumb, one-shot gentle reminders.
 
@@ -39,7 +39,7 @@ The evidence base for every attack: real usage after the 2026-08-01 demo reset i
 
 **3. The published roadmap re-promises shipped work.** v0.5's "gentle one-shot reminders handed to Apple Reminders" shipped in v0.3 (`a33f8ac`: "one-shot Send to Reminders"; live code at apps/ios/Sources/Views/InboxView.swift and AppModel.sendToReminders, plus the Mac). A roadmap that does not know what the product already contains was written from the README, not from the backlog.
 
-**4. TestFlight's rationale outlived its own fix.** The 2026-08-01 log justifies TestFlight as removing "the seven day re-signing wall". The paid Developer Program removed that wall on 2026-07-27, and knowledge-dump-v3 section 1 says in bold "do not warn about weekly or 7-day re-signing". The plan carried a dead reason forward, and nobody re-derived the item once its premise died. What TestFlight actually serves is beta testers, of whom there are currently none.
+**4. TestFlight's rationale outlived its own fix.** The 2026-08-01 log justifies TestFlight as removing "the seven day re-signing wall" (a wall that no longer exists: the maintainer's paid membership carries one-year profiles). The paid Developer Program removed that wall on 2026-07-27, and knowledge-dump-v3 section 1 says in bold "do not warn about weekly or 7-day re-signing". The plan carried a dead reason forward, and nobody re-derived the item once its premise died. What TestFlight actually serves is beta testers, of whom there are currently none.
 
 **5. v0.6 AI is a feature for data that does not exist.** Inbox summaries and stale-loop surfacing presuppose volume. Post-reset volume is five entries. An LM Studio localhost adapter also drags a heavyweight external dependency into a product whose README leads with "works out of the box". The spec itself ranks AI as "never a dependency"; the honest reading of the evidence is "never, until volume exists".
 
