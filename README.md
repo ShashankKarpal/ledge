@@ -83,7 +83,7 @@
 - **Option+Space anywhere.** Non-activating panel, so the app you were in keeps focus.
 - **Timestamped by default.** Day heading and time heading written automatically, newest first.
 - **Esc tucks away.** Autosaves, and removes an untouched empty entry.
-- **Siri capture.** Invoking without text prompts "What is the thought".
+- **Siri capture.** "Capture my thought in Ledge", "Capture to Ledge", or "Add to Ledge". Invoking without text prompts "What's the thought".
 - **Shortcuts capture net.** Appends to `capture/drop.md` even with no app installed or signed.
 - **Watch dictation.** Captures from the wrist and relays through the phone.
 - **Spool writer.** Out-of-app captures are queued and folded into the inbox automatically.

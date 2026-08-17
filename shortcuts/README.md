@@ -40,7 +40,7 @@ Now any app's share button can drop a thought, link, or paragraph into your inbo
 | Lock Screen | Long-press the Lock Screen > Customize > add the Shortcuts widget > choose Capture to Ledge |
 | Control Center (iOS 18+) | Customize Control Center > add the "Shortcut" control > point it at Capture to Ledge |
 | Home Screen widget | Long-press Home Screen > add Shortcuts widget |
-| Siri | Just say "Capture to Ledge" (the shortcut name is the phrase) |
+| Siri | With the app installed, say "Capture my thought in Ledge" or "Capture to Ledge" (the App Intent). If you keep this manual recipe, rename it to something other than "Capture to Ledge": a personal shortcut with the same name shadows the app's Siri phrase and, if its file bookmark ever breaks, fails silently |
 | Apple Watch | The native Ledge watch app (dictation) relays through your iPhone; Shortcuts file actions are unreliable on watchOS, so the watch app is the supported wrist path |
 
 Recommendation: bind Action Button AND Back Tap. Two reflexes, zero thought.
