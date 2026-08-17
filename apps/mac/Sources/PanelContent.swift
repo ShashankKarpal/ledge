@@ -124,7 +124,7 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
     private var lastSeenDiskRaw = ""
 
     /// Label written into every entry captured on this Mac. Override with:
-    /// defaults write com.example.ledge.mac deviceLabel "MacBook M4"
+    /// defaults write com.shashankkarpal.ledge.mac deviceLabel "MacBook M4"
     static let deviceLabel: String = {
         if let custom = UserDefaults.standard.string(forKey: "deviceLabel"), !custom.isEmpty {
             return custom
@@ -154,7 +154,9 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
             }
             setEditorText(inbox.serialized())
             placeCaretAtFirstEntry()
-            if drained > 0 {
+            if let waiting = spoolWaitingLine() {
+                headerLabel.stringValue = "Inbox · " + waiting
+            } else if drained > 0 {
                 headerLabel.stringValue = "Inbox · \(drained) folded in from your devices"
             }
             maybeShowMorningLedge()
@@ -242,6 +244,13 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
             if drained > 0 {
                 try? store.saveInbox(inbox)
             }
+            // Capture trust: anything still in the spool after that drain
+            // attempt is stuck, and the header must say so even when the
+            // editor itself has nothing new to show.
+            let waiting = spoolWaitingLine()
+            if let waiting {
+                headerLabel.stringValue = "Inbox · " + waiting
+            }
             let newestIsEmpty = inbox.days.first?.entries.first?.text.isEmpty ?? false
             if !newestIsEmpty {
                 inbox.prepend(text: "", at: Date(), device: Self.deviceLabel)
@@ -250,10 +259,20 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
             guard serialized != lastSetEditorText else { return }
             setEditorText(serialized)
             placeCaretAtFirstEntry()
-            headerLabel.stringValue = "Inbox · updated from your devices"
+            if waiting == nil {
+                headerLabel.stringValue = "Inbox · updated from your devices"
+            }
         } catch {
             // Quiet by design; the next summon retries with full handling.
         }
+    }
+
+    /// The muted capture-trust line: captures still in the spool after a drain
+    /// attempt. Nil when the spool is empty, which is the healthy case.
+    private func spoolWaitingLine() -> String? {
+        let raw = ((try? store.readString(store.spoolURL)) ?? nil) ?? ""
+        let fallback = store.modificationDate(of: store.spoolURL) ?? Date()
+        return Spool.status(raw, fallbackDate: fallback).waitingLine()
     }
 
     func resetHeader() {

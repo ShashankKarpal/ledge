@@ -17,6 +17,22 @@ check here first.
   language and give exact runnable commands.
 - This is a personal portfolio project, unrelated to the owner's employer.
 
+## Decisions on record (owner-made, FINAL until he reopens them)
+
+- The iPhone Action Button stays on Workout. Never plan, suggest, or document
+  Action Button integration. The watch face complication and Siri are the only
+  watch triggers.
+- TestFlight is killed (red-team C5), and the would-be first tester is on hold
+  with it. Do not propose either.
+- Final-five item 5, the distribution decision, is ON HOLD by the owner's
+  explicit choice: no nags, no deadlines; it revisits only when he raises it.
+  This supersedes the "default on silence is archive" framing in
+  docs/ROADMAP-REDTEAM-2026-08-17.md.
+- Build order approved 2026-08-17: item 2 remainder, then item 1
+  (capture-trust as scope-capped), then item 3 (VERSION single source plus CI
+  drift gate); item 4, the seven-day gate, initiates after item 3 lands and
+  governs all feature work after it.
+
 ## Repo visibility and publish policy
 
 - This repo is PUBLIC by deliberate decision (pushed public 2026-07-24;

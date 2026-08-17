@@ -131,6 +131,43 @@ final class LedgeCoreTests: XCTestCase {
         XCTAssertEqual(try store.drainSpool(into: &inbox), 0)
     }
 
+    // MARK: Capture trust (the stale-spool check)
+
+    func testSpoolStatusEmpty() {
+        let status = Spool.status("", fallbackDate: date("2026-08-16 13:47"))
+        XCTAssertEqual(status, .empty)
+        XCTAssertNil(status.waitingLine(now: date("2026-08-17 09:00")))
+    }
+
+    func testSpoolStatusCountsAndFindsOldest() {
+        let raw = "[[2026-08-16 13:47]] stranded\n[[2026-08-17 08:00]] fresh\n"
+        let status = Spool.status(raw, fallbackDate: date("2026-08-17 09:00"))
+        XCTAssertEqual(status.count, 2)
+        XCTAssertEqual(status.oldest, date("2026-08-16 13:47"))
+    }
+
+    func testSpoolStatusStaleThreshold() {
+        let status = Spool.status("[[2026-08-17 08:00]] waiting", fallbackDate: date("2026-08-17 08:00"))
+        XCTAssertFalse(status.isStale(now: date("2026-08-17 08:59")))
+        XCTAssertTrue(status.isStale(now: date("2026-08-17 09:01")))
+    }
+
+    func testWaitingLineCopyAndMerge() {
+        let fresh = Spool.status("[[2026-08-17 08:59]] one", fallbackDate: date("2026-08-17 09:00"))
+        XCTAssertEqual(fresh.waitingLine(now: date("2026-08-17 09:00")), "1 capture waiting")
+        let stale = Spool.status(
+            "[[2026-08-16 13:47]] one\n[[2026-08-16 14:00]] two",
+            fallbackDate: date("2026-08-17 09:00")
+        )
+        XCTAssertEqual(
+            stale.waitingLine(now: date("2026-08-17 09:00")),
+            "2 captures waiting since 2026-08-16 13:47"
+        )
+        let combined = fresh.merged(with: stale)
+        XCTAssertEqual(combined.count, 3)
+        XCTAssertEqual(combined.oldest, date("2026-08-16 13:47"))
+    }
+
     // MARK: Aging
 
     func testAgingMovesOldDaysToAttic() throws {

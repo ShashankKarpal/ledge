@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotkey = HotkeyManager()
     private var syncWatcher: NSMetadataQuery?
     private var refreshWork: DispatchWorkItem?
+    private var drainTimer: Timer?
     private var dragCapture: DragJiggleCaptureController?
     private var settingsWindow: SettingsWindowController?
 
@@ -49,6 +50,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         maintain()
 
         startSyncWatcher()
+        startDrainTimer()
+    }
+
+    /// Capture trust: fold out-of-app captures in even when the panel is never
+    /// summoned (a capture once sat in the spool for eleven days while the app
+    /// ran). Slow on purpose; the open panel's own 2-second heartbeat covers
+    /// the visible case, so this only runs while the panel is tucked away.
+    private func startDrainTimer() {
+        let timer = Timer(timeInterval: 300, repeats: true) { [weak self] _ in
+            guard let self, !self.panelController.isVisible else { return }
+            self.maintain()
+        }
+        timer.tolerance = 30
+        RunLoop.main.add(timer, forMode: .common)
+        drainTimer = timer
     }
 
     /// Keep the Mac's local copies of the Ledge files fresh. Without a live

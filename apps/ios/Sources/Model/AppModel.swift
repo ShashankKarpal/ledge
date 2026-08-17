@@ -16,6 +16,11 @@ final class AppModel: ObservableObject {
     /// Calm amber banner text. Nil when everything is fine. Never alarmist.
     @Published var notice: String?
 
+    /// Muted capture-trust line: captures waiting outside the inbox (the spool
+    /// or the local pending queue) after a drain attempt. Nil when everything
+    /// has landed, which is the healthy, invisible case.
+    @Published private(set) var waitingLine: String?
+
     /// True when a folder bookmark exists (drives setup vs inbox screen).
     @Published private(set) var hasFolder: Bool
 
@@ -123,6 +128,21 @@ final class AppModel: ObservableObject {
         } catch {
             notice = "Ledge could not read your folder just now. Pull to refresh to try again."
         }
+        updateWaitingLine()
+    }
+
+    /// Recount what is waiting outside the inbox. Called after every drain or
+    /// queue attempt so the muted line tracks reality, not hope. Pass the
+    /// spool content when the caller already read it this tick.
+    private func updateWaitingLine(spoolRaw: String? = nil) {
+        var status = Spool.status(SpoolWriter.pendingContents() ?? "", fallbackDate: Date())
+        if let store, isConnected {
+            let raw = spoolRaw ?? (((try? store.readString(store.spoolURL)) ?? nil) ?? "")
+            let fallback = store.modificationDate(of: store.spoolURL) ?? Date()
+            status = status.merged(with: Spool.status(raw, fallbackDate: fallback))
+        }
+        let line = status.waitingLine()
+        if line != waitingLine { waitingLine = line }
     }
 
     // MARK: Capture
@@ -146,6 +166,7 @@ final class AppModel: ObservableObject {
         } catch {
             SpoolWriter.appendToPending(Spool.line(for: trimmed, at: now, device: Self.deviceName))
             notice = "Captured to the local queue. Ledge will file it when the folder is reachable."
+            updateWaitingLine()
         }
     }
 
@@ -155,6 +176,7 @@ final class AppModel: ObservableObject {
         guard !trimmed.isEmpty else { return }
         SpoolWriter.appendToPending(Spool.line(for: trimmed, at: date, device: Self.deviceName))
         notice = "Captured. Ledge will file it once your folder is connected."
+        updateWaitingLine()
     }
 
     /// Move locally queued captures into the real spool, then clear the queue.
@@ -172,6 +194,7 @@ final class AppModel: ObservableObject {
         } catch {
             notice = "Some captures are still in the local queue. They flush on the next refresh."
         }
+        updateWaitingLine()
     }
 
     // MARK: Foreground heartbeat
@@ -206,7 +229,10 @@ final class AppModel: ObservableObject {
         if SpoolWriter.pendingContents() != nil { flushPending() }
         let spool = ((try? store.readString(store.spoolURL)) ?? nil) ?? ""
         let raw = ((try? store.readString(store.inboxURL)) ?? nil) ?? ""
-        if raw == lastSeenDiskRaw && LedgeFormat.trimEdges(spool).isEmpty { return }
+        if raw == lastSeenDiskRaw && LedgeFormat.trimEdges(spool).isEmpty {
+            updateWaitingLine(spoolRaw: spool)
+            return
+        }
         lastSeenDiskRaw = raw
         refresh()
     }

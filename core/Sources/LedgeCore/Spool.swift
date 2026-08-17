@@ -73,4 +73,54 @@ public enum Spool {
         }
         return "[[" + stamp + "]] " + text
     }
+
+    /// Count what is waiting in spool-format text (drop.md or a pending queue)
+    /// without folding anything. The capture-trust check: surfaces call this
+    /// after a drain attempt, so anything counted here is stuck, not in flight.
+    public static func status(_ text: String, fallbackDate: Date) -> SpoolStatus {
+        let captures = parse(text, fallbackDate: fallbackDate)
+        return SpoolStatus(count: captures.count, oldest: captures.map(\.date).min())
+    }
+}
+
+/// The waiting-capture summary behind the muted capture-trust line. A capture
+/// once sat in the spool for eleven days with zero indication on any surface;
+/// this type exists so that can never be invisible again.
+public struct SpoolStatus: Equatable {
+    public let count: Int
+    public let oldest: Date?
+
+    public static let empty = SpoolStatus(count: 0, oldest: nil)
+
+    public init(count: Int, oldest: Date?) {
+        self.count = count
+        self.oldest = oldest
+    }
+
+    /// Combine the spool and the local pending queue into one summary.
+    public func merged(with other: SpoolStatus) -> SpoolStatus {
+        SpoolStatus(
+            count: count + other.count,
+            oldest: [oldest, other.oldest].compactMap { $0 }.min()
+        )
+    }
+
+    /// A capture still waiting after this long is stuck, not in flight.
+    public func isStale(now: Date = Date(), threshold: TimeInterval = 3600) -> Bool {
+        guard let oldest else { return false }
+        return now.timeIntervalSince(oldest) > threshold
+    }
+
+    /// The muted in-surface line, shared by every platform so the copy never
+    /// drifts. Nil when nothing is waiting: the healthy case shows nothing,
+    /// per the no-badges rule. Stale captures name their date so an old
+    /// stranding reads as old.
+    public func waitingLine(now: Date = Date()) -> String? {
+        guard count > 0 else { return nil }
+        let noun = count == 1 ? "1 capture waiting" : "\(count) captures waiting"
+        if let oldest, isStale(now: now) {
+            return noun + " since " + LedgeFormat.spoolFormatter.string(from: oldest)
+        }
+        return noun
+    }
 }

@@ -18,6 +18,16 @@ struct InboxView: View {
                 noticeBanner(notice)
             }
             captureBar
+            if let waiting = model.waitingLine {
+                // Capture trust: the one muted line allowed by the no-badges
+                // rule. Appears only while a capture is stuck outside the inbox.
+                Text(waiting)
+                    .font(.caption2)
+                    .foregroundColor(.ledgeTextMuted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 4)
+            }
             List {
                 ForEach(model.inbox.days, id: \.day) { day in
                     Section {
