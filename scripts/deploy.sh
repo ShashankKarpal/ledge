@@ -85,7 +85,7 @@ build_ios() {
                -scheme Ledge \
                -destination "id=${IPHONE_UDID}" \
                -derivedDataPath "$DD" \
-               -quiet build > /tmp/ledge-iosbuild.log 2>&1 \
+               -allowProvisioningUpdates -quiet build > /tmp/ledge-iosbuild.log 2>&1 \
         || { grep -E 'error:' /tmp/ledge-iosbuild.log | head -20; die "iOS build failed, log at /tmp/ledge-iosbuild.log"; }
     ok "built"
 }
