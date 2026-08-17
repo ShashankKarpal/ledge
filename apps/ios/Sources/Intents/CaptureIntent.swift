@@ -1,11 +1,18 @@
-// Shortcuts and Siri capture. Writes to the spool (capture/drop.md), the safe
-// path for out-of-app writers, never straight into inbox.md. Works even when
-// the app's 7-day free signing has expired, as long as iOS can still run the
-// intent in the background.
+// Siri and Shortcuts capture, compiled into BOTH the iPhone app and the
+// watch app (see the LedgeWatch sources list in project.yml).
+// iPhone: writes to the spool (capture/drop.md), the safe path for
+// out-of-app writers, never straight into inbox.md; falls back to a local
+// pending queue, so capture never fails.
+// Watch: the watch cannot reach the iCloud folder, so the intent hands the
+// thought to the WatchConnectivity relay, whose queued transfer delivers
+// even when the iPhone is unreachable. Capture never fails there either.
 // Built by Claude (Anthropic).
 
 import Foundation
 import AppIntents
+#if os(watchOS)
+import LedgeCore
+#endif
 
 struct CaptureIntent: AppIntent {
     static var title: LocalizedStringResource = "Capture to Ledge"
@@ -16,7 +23,14 @@ struct CaptureIntent: AppIntent {
     var text: String
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        #if os(watchOS)
+        let trimmed = LedgeFormat.trimEdges(text)
+        if !trimmed.isEmpty {
+            WatchSessionManager.shared.send(trimmed)
+        }
+        #else
         SpoolWriter.append(text: text, at: Date(), device: "iPhone")
+        #endif
         return .result(dialog: "Captured.")
     }
 }

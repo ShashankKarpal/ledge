@@ -18,6 +18,14 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Signing: the Apple Team ID is never committed (see CLAUDE.md). It lives in
+# a gitignored .env at the repo root and feeds xcodegen and xcodebuild.
+if [ -f .env ]; then
+    set -a
+    . ./.env
+    set +a
+fi
+
 DD=/tmp/ledge-dd
 TARGET="${1:-all}"
 
@@ -68,6 +76,8 @@ PY
 # --------------------------------------------------------------- build
 build_ios() {
     say "Build"
+    [ -n "${LEDGE_DEVELOPMENT_TEAM:-}" ] \
+        || die "LEDGE_DEVELOPMENT_TEAM is not set. Copy .env.example to .env in the repo root and put your Apple Team ID in it (find it under Xcode > Settings > Accounts, or developer.apple.com > Membership)."
     if command -v xcodegen > /dev/null; then
         (cd apps/ios && xcodegen generate > /dev/null) && ok "project regenerated"
     fi

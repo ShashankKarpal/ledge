@@ -86,6 +86,7 @@
 - **Siri capture.** "Capture my thought in Ledge", "Capture to Ledge", or "Add to Ledge". Invoking without text prompts "What's the thought".
 - **Shortcuts capture net.** Appends to `capture/drop.md` even with no app installed or signed.
 - **Watch dictation.** Captures from the wrist and relays through the phone.
+- **Siri on the wrist.** The same capture phrases work on the Watch; queued delivery means the iPhone can be out of reach.
 - **Spool writer.** Out-of-app captures are queued and folded into the inbox automatically.
 - **Device attribution.** Every entry records the device it came from.
 - **Paste as Markdown.** Rich text pasted into the Mac sidebar lands as clean Markdown: links, bold, italic, and lists survive, and pasted images are filed into `assets/` and referenced. Plain text stays plain.
@@ -105,6 +106,7 @@
 - **Menu bar item** with a custom template glyph.
 - **Settings window.** Hotkey, panel width, Attic timing, start at login. No more editing settings.json by hand.
 - **Home Screen and Lock Screen widgets** carrying the Step mark.
+- **Watch face complications** (circular, corner, rectangular, inline), one tap into capture.
 - **Live heartbeat.** Watches the spool and pending queue so out-of-app captures appear without a refresh.
 
 ### File format
@@ -129,8 +131,9 @@ Apple platforms only, by design. Ledge is Swift and SwiftUI end to end, and it s
 |---|---|
 | macOS | 13 |
 | iOS and iPadOS | 16 |
-| watchOS | 9 |
+| watchOS | 10 |
 | Home Screen and Lock Screen widgets | iOS 18 |
+| Watch face complications | watchOS 10 |
 
 ## Install
 
@@ -159,7 +162,7 @@ open build/Ledge.app
 
 First launch creates the notes folder at `~/Library/Mobile Documents/com~apple~CloudDocs/Ledge`, or `~/Documents/Ledge` if iCloud Drive is unavailable.
 
-For iPhone, iPad, and Watch: `brew install xcodegen`, then `cd apps/ios && xcodegen generate`, open the project in Xcode, select your team, and run. Or use `./scripts/deploy.sh` to build and install on every connected device at once.
+For iPhone, iPad, and Watch: `brew install xcodegen`, then `cd apps/ios && xcodegen generate`, open the project in Xcode, select your team, and run. Or copy `.env.example` to `.env`, set `LEDGE_DEVELOPMENT_TEAM` to your Apple Team ID, and use `./scripts/deploy.sh` to build and install on every connected device at once.
 
 ## Usage
 
