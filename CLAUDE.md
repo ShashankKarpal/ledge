@@ -94,6 +94,12 @@ check here first.
 8. At session end: refresh the bridge handoff, write a session log, and if the
    owner had to answer a question this file should have answered, add the
    answer to this file in the same session.
+9. The seven-day gate governs feature work (active since 2026-08-17, final-five
+   item 4). Before starting any NEW feature, run
+   `bash scripts/seven-day-gate.sh`; if it reports CLOSED, the feature does not
+   start. Bug fixes, capture reliability, docs, and maintenance are always
+   exempt. The script is pull-only: never wire it into CI, a badge, or any
+   recurring surface, and never nag the owner about the run length.
 
 ## Security and hygiene rules (every agent session)
 
