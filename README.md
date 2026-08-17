@@ -85,8 +85,8 @@
 - **Esc tucks away.** Autosaves, and removes an untouched empty entry.
 - **Siri capture.** "Capture my thought in Ledge", "Capture to Ledge", or "Add to Ledge". Invoking without text prompts "What's the thought".
 - **One capture action.** Back Tap, Lock Screen, Control Center, and the share sheet all route to the Capture to Ledge App Intent (see `shortcuts/`); a zero-app fallback recipe still appends to `capture/drop.md` even with nothing installed or signed.
-- **Watch dictation.** Captures from the wrist and relays through the phone.
-- **Siri on the wrist.** The same capture phrases work on the Watch; queued delivery means the iPhone can be out of reach.
+- **Watch dictation.** Captures from the wrist and relays through the phone. Failed relays re-queue automatically, and every payload carries a delivery id, so a capture never silently vanishes and never lands twice.
+- **Siri on the wrist.** The same capture phrases work on the Watch; queued delivery means the iPhone can be out of reach, and delivery only counts on confirmed receipt.
 - **Spool writer.** Out-of-app captures are queued and folded into the inbox automatically.
 - **Device attribution.** Every entry records the device it came from.
 - **Paste as Markdown.** Rich text pasted into the Mac sidebar lands as clean Markdown: links, bold, italic, and lists survive, and pasted images are filed into `assets/` and referenced. Plain text stays plain.
@@ -114,6 +114,7 @@
 - **Plain Markdown.** Days newest first, entries newest first, timestamps automatic.
 - **No lock-in.** Any Markdown editor reads and writes these files.
 - **Disposable index.** `.ledge/` holds search index and settings; delete it any time and it rebuilds.
+- **Self-healing.** Inbox writes happen under file coordination, and every load detects and repairs corruption automatically.
 
 ## Stack
 
@@ -192,7 +193,7 @@ apps/ios/       iPhone and iPad app, the watchOS relay, and the widgets
 shortcuts/      capture trigger setup (intent-first) and the zero-app fallback recipe
 design/         brand assets, tokens, screenshots, BRAND.md
 docs/           architecture spec and the file-format contract
-scripts/        build and deploy
+scripts/        build, deploy, and the seven-day gate
 ```
 
 ## Roadmap
@@ -204,9 +205,17 @@ scripts/        build and deploy
 | v0.3.1 | Widgets and the Step identity across every surface | Shipped |
 | v0.3.2 | Notarized download matching the source, Edit menu so paste and copy work on the Mac | Shipped |
 | v0.4 | Paste as Markdown, the Morning Ledge daily digest, a Settings window | Shipped |
-| v0.5 | Gentle one-shot reminders handed to Apple Reminders, an iOS Share Sheet extension, TestFlight beta | Next |
+| v0.4.x | Capture trust: the watch relay never loses or duplicates a capture, the inbox self-heals, single-source version stamping in CI, the seven-day gate | Shipped |
+| v0.5 | Gentle one-shot reminders handed to Apple Reminders, an iOS Share Sheet extension | Gated |
 | v0.6 | Optional local AI adapter (LM Studio, off by default) for inbox summaries and stale-loop surfacing, end-of-day sweep | Planned |
-| Later | Inline images, focus mode, App Store release, single-source version stamping in CI | Planned |
+| Later | TestFlight beta, inline images, focus mode, App Store release | Planned |
+
+New feature work is gated: a version marked **Gated** starts only after the
+maintainer has captured into Ledge for seven consecutive days, verified by
+`scripts/seven-day-gate.sh`. The script is pull-only and run by hand: no CI,
+no badges, no nags. Bug fixes, capture reliability, and docs are always
+exempt. This is a dogfooding discipline for the builder, not a streak
+mechanic for you; the app itself still has no streaks and never will.
 
 ## Privacy
 
