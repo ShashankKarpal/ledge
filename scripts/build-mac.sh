@@ -24,6 +24,12 @@ xcrun swiftc $SOURCES \
 
 cp apps/mac/Info.plist "$APP/Contents/Info.plist"
 
+# Single source of truth for the version: the VERSION file at the repo root.
+# Stamped into the copied plist (never the committed one) before signing.
+VERSION="$(tr -d '[:space:]' < VERSION)"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "$APP/Contents/Info.plist"
+echo "Stamped version ${VERSION} from VERSION"
+
 # App icon: compiled from the .iconset at build time, so git holds PNGs and
 # never a binary .icns blob.
 if [ -d apps/mac/Resources/Ledge.iconset ]; then

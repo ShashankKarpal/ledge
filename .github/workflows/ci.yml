@@ -6,6 +6,14 @@ on:
   pull_request:
 
 jobs:
+  version-drift:
+    name: Version drift gate
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+      - name: Every version literal must equal the VERSION file
+        run: bash scripts/check-version.sh
+
   core-tests:
     name: LedgeCore tests
     runs-on: macos-14
