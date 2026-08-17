@@ -1,60 +1,119 @@
-# The capture net: iPhone and iPad capture with zero apps
+# Capture triggers: every path leads to the App Intent
 
-This is Ledge's most important resilience feature. It uses only Apple's Shortcuts app, so it works today, needs no signing, never expires, and keeps capturing even if the Ledge app is not installed or its free-tier signature has lapsed. Captures land in `capture/drop.md`; every Ledge app folds them into the inbox automatically.
+Ledge has exactly one capture action: **Capture to Ledge**, the App Intent built
+into the app. Every trigger on this page points at it. The intent writes to the
+spool (`capture/drop.md`), never straight into `inbox.md`, and if iCloud is
+unreachable it queues the thought locally and delivers it later. No file
+bookmarks, no silent failures, nothing to heal.
 
-Build these once by hand (Shortcuts cannot be safely shipped as files without signing); each takes about two minutes.
+There used to be a hand-built file-bookmark recipe as the default path. It is
+now the documented disaster fallback at the bottom of this page, nothing more.
+If you set Ledge up before this change, do the two-minute
+[migration](#migrating-from-the-old-recipe) first.
 
-## Shortcut 1: "Capture to Ledge" (typed or dictated)
+## Siri: nothing to build
 
-Open Shortcuts > + > name it `Capture to Ledge`.
+With the app installed and launched once, these phrases just work:
 
-Add these actions in order:
+- "Capture my thought in Ledge"
+- "Capture to Ledge"
+- "Add to Ledge"
+- "Capture a thought in Ledge"
+- "Ledge, capture my thought"
 
-1. **Ask for Input**. Prompt: `What's the thought?`. Input type: Text. Turn OFF "Allow multiline" only if you prefer one-line speed; otherwise leave on.
-2. **Current Date** (no changes).
-3. **Format Date**. Date: Current Date. Format: Custom. Format string exactly: `yyyy-MM-dd HH:mm`
-4. **Text**. Content exactly (use the variable chips for the two bracketed parts):
-   `[[Formatted Date]] Provided Input`
-   So the line reads: two literal `[` characters, the Formatted Date variable, two literal `]` characters, one space, the Provided Input variable. Result example: `[[2026-07-19 14:05]] Call Ishan re renewal`.
-5. **Append to Text File**. File: browse to your Ledge folder in iCloud Drive > `capture` > `drop.md`. Text: the Text variable from step 4. Make New Line: ON.
+Siri asks "What's the thought?", you dictate, Siri replies "Captured." The same
+phrases work on the Apple Watch.
 
-Done. Test it once; approve the folder access prompt the first time.
+## The wrapper shortcut: "Capture with Ledge"
 
-## Shortcut 2: "Capture Share to Ledge" (share sheet)
+Back Tap, the Lock Screen, and Control Center bind to shortcuts in your
+library, so the intent needs a one-action wrapper. Build it once:
 
-Duplicate Shortcut 1, rename, then:
+1. Open Shortcuts > **+** > name it `Capture with Ledge`.
+   **Do not name it "Capture to Ledge"**: a personal shortcut with the same
+   name as the app's Siri phrase shadows the phrase, and that exact collision
+   once broke Siri capture for weeks.
+2. Add one action: search for **Ledge** > **Capture to Ledge**.
+3. Tap the **Thought** field inside the action > select **Ask Each Time**.
 
-1. Delete the Ask for Input action.
-2. Tap the shortcut's settings (info icon) > turn ON **Show in Share Sheet**. Accept: Text, URLs, Safari web pages.
-3. In the Text action, replace `Provided Input` with the **Shortcut Input** variable.
-4. Optional: add a first action **Get Text from Shortcut Input** if you share web pages often (captures the URL and title cleanly).
+Done. Running it prompts for the thought and files it. No folder access
+prompts, no file picking.
 
-Now any app's share button can drop a thought, link, or paragraph into your inbox.
+## The share sheet wrapper: "Share to Ledge"
+
+To capture a link, paragraph, or page from any app's share button:
+
+1. Open Shortcuts > **+** > name it `Share to Ledge`.
+2. Add one action: **Ledge** > **Capture to Ledge**.
+3. Tap the **Thought** field > select the **Shortcut Input** variable.
+4. Open the shortcut's settings (info icon) > turn ON **Show in Share Sheet**.
+   Accept: Text, URLs, Safari web pages.
 
 ## Bind the triggers (this is where ADHD capture is won)
 
 | Trigger | Where to set it |
 |---|---|
-| Action Button (iPhone 15 Pro and later) | Settings > Action Button > Shortcut > Capture to Ledge |
-| Back Tap (any recent iPhone) | Settings > Accessibility > Touch > Back Tap > Double Tap > Capture to Ledge |
-| Lock Screen | Long-press the Lock Screen > Customize > add the Shortcuts widget > choose Capture to Ledge |
-| Control Center (iOS 18+) | Customize Control Center > add the "Shortcut" control > point it at Capture to Ledge |
-| Home Screen widget | Long-press Home Screen > add Shortcuts widget |
-| Siri | With the app installed, say "Capture my thought in Ledge" or "Capture to Ledge" (the App Intent). If you keep this manual recipe, rename it to something other than "Capture to Ledge": a personal shortcut with the same name shadows the app's Siri phrase and, if its file bookmark ever breaks, fails silently |
-| Apple Watch | The native Ledge watch app (dictation) relays through your iPhone; Shortcuts file actions are unreliable on watchOS, so the watch app is the supported wrist path |
+| Back Tap (any recent iPhone) | Settings > Accessibility > Touch > Back Tap > Double Tap > **Capture with Ledge** |
+| Lock Screen | Long-press the Lock Screen > Customize > add the Shortcuts widget > choose **Capture with Ledge** |
+| Control Center (iOS 18+) | Customize Control Center > add Ledge's own **Capture** control, or add the "Shortcut" control pointed at **Capture with Ledge** |
+| Home Screen widget | Long-press the Home Screen > add the Ledge widget, or a Shortcuts widget pointed at **Capture with Ledge** |
+| Share sheet | Any app > Share > **Share to Ledge** |
+| Siri | Say a phrase from the list above; nothing to configure |
+| Apple Watch | The native Ledge watch app (dictation), the watch face complications, or Siri on the wrist; all relay through the iPhone with queued delivery |
 
-Recommendation: bind Action Button AND Back Tap. Two reflexes, zero thought.
+Recommendation: bind Back Tap and keep the Lock Screen widget. Two reflexes,
+zero thought.
 
-## Dictation-first variant
+## Migrating from the old recipe
 
-Duplicate Shortcut 1 and replace **Ask for Input** with **Dictate Text**. Bind that one to the Action Button if voice beats typing for you. Transcription happens on device.
+If you built the original file-bookmark recipe:
 
-## If you ever see: the file drop.md could not be opened
+1. In Shortcuts, rename your personal `Capture to Ledge` shortcut to
+   `Ledge fallback capture`. This removes the Siri name collision permanently.
+   (If you never healed its file bookmark after v0.3.1, delete it instead and
+   rebuild it from the fallback section below if you ever need it.)
+2. Build `Capture with Ledge` and `Share to Ledge` as above.
+3. Re-point every binding in the table above (Back Tap, Lock Screen, Control
+   Center, share sheet) away from the old recipe and at the wrappers.
+4. Test once: double Back Tap, type a thought, then open the Ledge app and see
+   it land in the inbox.
 
-The Append to Text File action stores a bookmark to the exact file you picked. Before v0.3.1 the apps truncated the spool by atomically replacing it, which gave drop.md a new identity and orphaned every existing bookmark; the shortcut then failed on every run. Since v0.3.1 all spool writes happen in place, so bookmarks stay valid forever. To heal a shortcut built before the fix: open the shortcut, tap the file chip inside Append to Text File, and re-pick Ledge > capture > drop.md once. Preferred setup now that the app carries a one-year signature: point Back Tap and the share sheet at the Capture to Ledge App Intent instead; it uses no file bookmark at all and falls back to a local pending queue when iCloud is unreachable.
+## Disaster fallback: capture with zero apps
+
+Kept for the day the app is gone: this recipe uses only Apple's Shortcuts app,
+so it works with Ledge uninstalled, unsigned, or unbuildable. It appends to
+`capture/drop.md`; any Ledge app folds the entries into the inbox later.
+
+Know its one weakness before trusting it: the **Append to Text File** action
+stores a bookmark to the exact file you picked, and if that bookmark ever
+breaks, the shortcut fails silently on every run. (Ledge app versions before
+v0.3.1 broke it on every spool drain; since v0.3.1 all spool writes happen in
+place, so bookmarks built today stay valid.) If you ever see "the file drop.md
+could not be opened", open the shortcut, tap the file chip inside Append to
+Text File, and re-pick Ledge > `capture` > `drop.md` once.
+
+Build it as `Ledge fallback capture` (never "Capture to Ledge"; see above):
+
+1. **Ask for Input**. Prompt: `What's the thought?`. Input type: Text.
+2. **Current Date** (no changes).
+3. **Format Date**. Date: Current Date. Format: Custom. Format string exactly:
+   `yyyy-MM-dd HH:mm`
+4. **Text**. Content exactly (use the variable chips for the two bracketed
+   parts): `[[Formatted Date]] Provided Input`. So the line reads: two literal
+   `[` characters, the Formatted Date variable, two literal `]` characters,
+   one space, the Provided Input variable. Result example:
+   `[[2026-07-19 14:05]] Call Ishan re renewal`.
+5. **Append to Text File**. File: browse to your Ledge folder in iCloud Drive
+   > `capture` > `drop.md`. Text: the Text variable from step 4. Make New
+   Line: ON.
+
+Test it once; approve the folder access prompt the first time. Leave it
+unbound: it exists so capture survives the app, not as a daily path.
 
 ## How it stays safe
 
-The shortcut only ever appends to `capture/drop.md`, never touches `inbox.md`. The apps drain the spool with a coordinated read, fold entries into the inbox with timestamps preserved, deduplicate, and truncate the spool. If iCloud is slow, captures wait in the spool file; nothing is lost. If the drop.md file is missing, Append to Text File creates it.
-
-Once the iOS app is installed, you also get the "Add to Ledge" Siri App Intent, which writes the same spool format. The manual shortcuts remain as the layer that never expires.
+Every path on this page only ever appends to the spool (`capture/drop.md` on
+disk, or the intent's local pending queue when iCloud is unreachable), never
+touches `inbox.md`. The apps drain the spool with a coordinated read, fold
+entries into the inbox with timestamps preserved, deduplicate, and truncate the
+spool in place. If iCloud is slow, captures wait; nothing is lost.

@@ -84,7 +84,7 @@
 - **Timestamped by default.** Day heading and time heading written automatically, newest first.
 - **Esc tucks away.** Autosaves, and removes an untouched empty entry.
 - **Siri capture.** "Capture my thought in Ledge", "Capture to Ledge", or "Add to Ledge". Invoking without text prompts "What's the thought".
-- **Shortcuts capture net.** Appends to `capture/drop.md` even with no app installed or signed.
+- **One capture action.** Back Tap, Lock Screen, Control Center, and the share sheet all route to the Capture to Ledge App Intent (see `shortcuts/`); a zero-app fallback recipe still appends to `capture/drop.md` even with nothing installed or signed.
 - **Watch dictation.** Captures from the wrist and relays through the phone.
 - **Siri on the wrist.** The same capture phrases work on the Watch; queued delivery means the iPhone can be out of reach.
 - **Spool writer.** Out-of-app captures are queued and folded into the inbox automatically.
@@ -189,7 +189,7 @@ Do not reinstall the Watch app from the iPhone Watch app toggle. That path is fo
 core/           LedgeCore: file format, inbox, spool, search, Attic, Open Loops
 apps/mac/       Mac sidebar app
 apps/ios/       iPhone and iPad app, the watchOS relay, and the widgets
-shortcuts/      the Shortcuts capture recipe
+shortcuts/      capture trigger setup (intent-first) and the zero-app fallback recipe
 design/         brand assets, tokens, screenshots, BRAND.md
 docs/           architecture spec and the file-format contract
 scripts/        build and deploy
