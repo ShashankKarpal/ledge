@@ -195,6 +195,31 @@ public struct Inbox: Equatable {
         return added
     }
 
+    /// Collapse entries that are byte-identical twins (same minute, same text,
+    /// same device) down to one. Run only as part of corruption repair: the
+    /// null-byte incident of 2026-08-17 showed that corruption inside an entry
+    /// body defeats fold's text dedupe, so the duplicate and the corruption
+    /// arrive together and should be cleaned together. Returns entries removed.
+    @discardableResult
+    public mutating func collapseExactDuplicates() -> Int {
+        var removed = 0
+        for index in days.indices {
+            var seen = Set<String>()
+            var kept: [Entry] = []
+            for entry in days[index].entries {
+                let key = LedgeFormat.spoolFormatter.string(from: entry.timestamp)
+                    + "|" + (entry.device ?? "") + "|" + entry.text
+                if seen.insert(key).inserted {
+                    kept.append(entry)
+                } else {
+                    removed += 1
+                }
+            }
+            days[index].entries = kept
+        }
+        return removed
+    }
+
     /// Drop entries whose text is empty (e.g. a summon that captured nothing), then empty days.
     public mutating func removeEmptyEntries() {
         for index in days.indices {

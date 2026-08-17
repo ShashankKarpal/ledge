@@ -7,28 +7,31 @@ import Foundation
 public enum Spool {
     /// Parse spool content into captures. Unmarked leading text becomes one capture
     /// stamped with `fallbackDate` (callers pass the file's modification time).
-    public static func parse(_ text: String, fallbackDate: Date) -> [(date: Date, text: String, device: String?)] {
-        var captures: [(date: Date, text: String, device: String?)] = []
+    /// Null bytes are corruption, never content, and are scrubbed before parsing.
+    public static func parse(_ text: String, fallbackDate: Date) -> [(date: Date, text: String, device: String?, id: String?)] {
+        var captures: [(date: Date, text: String, device: String?, id: String?)] = []
         var leadingLines: [String] = []
         var currentDate: Date?
         var currentDevice: String?
+        var currentID: String?
         var currentLines: [String] = []
 
         func flush() {
             if let date = currentDate {
                 let body = LedgeFormat.trimEdges(currentLines.joined(separator: "\n"))
                 if !body.isEmpty {
-                    captures.append((date, body, currentDevice))
+                    captures.append((date, body, currentDevice, currentID))
                 }
             }
             currentLines = []
         }
 
-        for line in text.components(separatedBy: "\n") {
-            if let (date, device, rest) = markerMatch(line) {
+        for line in LedgeFormat.strippingNulls(text).components(separatedBy: "\n") {
+            if let (date, device, id, rest) = markerMatch(line) {
                 flush()
                 currentDate = date
                 currentDevice = device
+                currentID = id
                 currentLines = [rest]
             } else if currentDate != nil {
                 currentLines.append(line)
@@ -40,36 +43,49 @@ public enum Spool {
 
         let leading = LedgeFormat.trimEdges(leadingLines.joined(separator: "\n"))
         if !leading.isEmpty {
-            captures.insert((fallbackDate, leading, nil), at: 0)
+            captures.insert((fallbackDate, leading, nil, nil), at: 0)
         }
         return captures
     }
 
-    /// Matches `[[yyyy-MM-dd HH:mm]]` or `[[yyyy-MM-dd HH:mm · device]]` at the
-    /// start of a line; returns the date, optional device, and the rest.
-    static func markerMatch(_ line: String) -> (Date, String?, String)? {
+    /// Matches `[[yyyy-MM-dd HH:mm]]` at the start of a line, with optional
+    /// ` · device` and ` · #id` fields in the stamp; returns the date, optional
+    /// device, optional capture id, and the rest of the line.
+    static func markerMatch(_ line: String) -> (Date, String?, String?, String)? {
         guard line.hasPrefix("[[") else { return nil }
         guard let close = line.range(of: "]]") else { return nil }
         let stampStart = line.index(line.startIndex, offsetBy: 2)
         guard stampStart <= close.lowerBound else { return nil }
-        var stamp = String(line[stampStart..<close.lowerBound]).trimmingCharacters(in: .whitespaces)
+        let stamp = String(line[stampStart..<close.lowerBound]).trimmingCharacters(in: .whitespaces)
+        let fields = stamp.components(separatedBy: " · ")
+        guard let date = LedgeFormat.spoolFormatter.date(from: fields[0].trimmingCharacters(in: .whitespaces)) else { return nil }
         var device: String?
-        if let sep = stamp.range(of: " · ") {
-            let tag = String(stamp[sep.upperBound...]).trimmingCharacters(in: .whitespaces)
-            device = tag.isEmpty ? nil : tag
-            stamp = String(stamp[..<sep.lowerBound])
+        var id: String?
+        for field in fields.dropFirst() {
+            let tag = field.trimmingCharacters(in: .whitespaces)
+            if tag.hasPrefix("#") {
+                let value = String(tag.dropFirst())
+                if !value.isEmpty { id = value }
+            } else if !tag.isEmpty {
+                device = tag
+            }
         }
-        guard let date = LedgeFormat.spoolFormatter.date(from: stamp) else { return nil }
         var rest = String(line[close.upperBound...])
         if rest.hasPrefix(" ") { rest.removeFirst() }
-        return (date, device, rest)
+        return (date, device, id, rest)
     }
 
     /// Render a capture as a spool line (used by the watch relay and tests).
-    public static func line(for text: String, at date: Date, device: String? = nil) -> String {
+    /// The optional id is the capture's delivery UUID: the watch relay can hand
+    /// the same capture over twice (a live message whose reply timed out, then
+    /// the queued fallback), and the id is what lets the drain drop the copy.
+    public static func line(for text: String, at date: Date, device: String? = nil, id: String? = nil) -> String {
         var stamp = LedgeFormat.spoolFormatter.string(from: date)
         if let device, !device.isEmpty {
             stamp += " · " + device
+        }
+        if let id, !id.isEmpty {
+            stamp += " · #" + id
         }
         return "[[" + stamp + "]] " + text
     }

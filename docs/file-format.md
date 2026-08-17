@@ -18,6 +18,7 @@ Ledge/
   .ledge/
     settings.json     app settings
     index.json        disposable search cache (delete freely)
+    seen-capture-ids.txt   delivery ids already folded, for drain dedupe
 ```
 
 ## inbox.md
@@ -58,6 +59,25 @@ that spans multiple lines, until the next marker.
 
 A marker is `[[yyyy-MM-dd HH:mm]] ` at the start of a line. Text without a leading marker at the top of the file is treated as one capture stamped with the file's modification time. Apps drain the spool by folding every capture into inbox.md (correct day, sorted by time) and then truncating drop.md to empty. Single-writer principle: apps own inbox.md, capture surfaces own drop.md; this is what keeps iCloud conflicts away.
 
+### Delivery ids (added 2026-08-17)
+
+A marker may carry a ` · #id` field after the optional device tag:
+
+```
+[[2026-08-17 09:27 · Apple Watch · #6F9B2C3A-...]] dictated text
+```
+
+The id identifies one delivery of one capture. The watch relay stamps a UUID
+into every payload because its transport is deliver-at-least-once: a live
+message whose reply times out is retried over the queued path, and a queued
+transfer that fails is re-queued, so the same capture can legally reach the
+phone twice. At drain time, captures whose id already appears in
+`.ledge/seen-capture-ids.txt` are dropped instead of folded; every drained id
+is appended to that ledger (capped to the newest 500). The ledger lives in the
+shared folder so all devices drain against the same list. Markers without an
+id remain valid (Shortcuts never writes one) and fall back to day + minute +
+exact-text dedupe. The id never appears in inbox.md.
+
 ## notes/
 
 Free-form Markdown files. Display title is the first non-empty line, stripped of leading `#` marks. Filenames are `yyyy-MM-dd-slug.md` at creation and stable afterwards; renaming content does not rename files.
@@ -93,7 +113,7 @@ separated by " · " (space, middle dot U+00B7, space):
 
 The device tag is free text without newlines: iPhone, iPad, Apple Watch, or a
 Mac label (default: the computer name; override per machine with
-`defaults write com.example.ledge.mac deviceLabel "MacBook M4"`).
+`defaults write com.shashankkarpal.ledge.mac deviceLabel "MacBook M4"`).
 Headers without the suffix remain valid. The tag is not part of entry identity:
 dedupe stays day + minute + text. All app capture surfaces write it as of v0.2;
 hand-built Shortcuts recipes may omit it and stay valid.
@@ -109,3 +129,13 @@ hand-built Shortcuts recipes may omit it and stay valid.
 4. The spool is truncated by exactly the content that was folded.
 5. iOS keeps a local capture journal until each capture is confirmed present
    in a loaded inbox; unconfirmed captures are folded back on refresh.
+6. (added 2026-08-17) The inbox stamp check, merge, and write happen inside a
+   single NSFileCoordinator writing block, so no other coordinated writer can
+   land bytes between the check and the write.
+7. (added 2026-08-17) Null bytes are corruption, never content. Loads scrub
+   them, and a load that finds them rewrites the file clean (under file
+   coordination) and collapses the exact-duplicate entries such corruption
+   smuggles past text dedupe. Spool parsing scrubs them too, and a spool that
+   holds only corruption bytes is cleared rather than counted as waiting.
+8. (added 2026-08-17) Watch-relay deliveries are deduplicated by delivery id
+   across drain batches and devices (see "Delivery ids" above).

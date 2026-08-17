@@ -28,8 +28,12 @@ final class SessionManager: NSObject, WCSessionDelegate {
         guard let text = payload["text"] as? String, !text.isEmpty else { return }
         let stamp = payload["stamp"] as? String
         let date = stamp.flatMap { LedgeFormat.spoolFormatter.date(from: $0) } ?? Date()
+        // The watch's delivery id rides along into the spool line so the drain
+        // can drop a second delivery of the same capture (live message whose
+        // reply timed out, then the queued fallback).
+        let id = payload["id"] as? String
         writeQueue.async {
-            SpoolWriter.append(text: text, at: date, device: "Apple Watch")
+            SpoolWriter.append(text: text, at: date, device: "Apple Watch", id: id)
         }
     }
 

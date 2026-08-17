@@ -346,7 +346,153 @@ final class LedgeCoreTests: XCTestCase {
         XCTAssertEqual(captures[0].device, "Apple Watch")
         XCTAssertEqual(captures[0].text, "from the wrist")
         var inbox = Inbox()
-        _ = inbox.fold(captures)
+        _ = inbox.fold(captures.map { (date: $0.date, text: $0.text, device: $0.device) })
         XCTAssertEqual(inbox.days[0].entries[0].device, "Apple Watch")
+    }
+
+    // MARK: Capture delivery ids (bug 2, 2026-08-17: duplicate watch delivery)
+
+    func testSpoolLineWithIDRoundTrip() {
+        let line = Spool.line(for: "wrist thought", at: date("2026-08-17 09:27"), device: "Apple Watch", id: "ABC-123")
+        XCTAssertEqual(line, "[[2026-08-17 09:27 · Apple Watch · #ABC-123]] wrist thought")
+        let captures = Spool.parse(line, fallbackDate: date("2026-08-17 10:00"))
+        XCTAssertEqual(captures.count, 1)
+        XCTAssertEqual(captures[0].id, "ABC-123")
+        XCTAssertEqual(captures[0].device, "Apple Watch")
+        XCTAssertEqual(captures[0].text, "wrist thought")
+    }
+
+    func testSpoolIDWithoutDeviceAndLegacyLinesParse() {
+        let withID = Spool.parse("[[2026-08-17 09:27 · #X1]] no device", fallbackDate: date("2026-08-17 10:00"))
+        XCTAssertEqual(withID[0].id, "X1")
+        XCTAssertNil(withID[0].device)
+        let legacy = Spool.parse("[[2026-08-17 09:27 · Apple Watch]] old format", fallbackDate: date("2026-08-17 10:00"))
+        XCTAssertNil(legacy[0].id)
+        XCTAssertEqual(legacy[0].device, "Apple Watch")
+    }
+
+    func testReplyTimeoutDoubleDeliveryIsDeduplicatedAcrossDrains() throws {
+        // The reply-timeout double path: the phone receives the live message,
+        // the reply times out on the watch, and the queued fallback delivers
+        // the same capture again in a LATER batch. Same id both times.
+        let store = try makeTempStore()
+        var inbox = try store.loadInbox()
+        let line = Spool.line(for: "a twin delivery from the wrist", at: date("2026-08-17 09:27"), device: "Apple Watch", id: "DUP-1")
+
+        try store.writeStringInPlace(line + "\n", to: store.spoolURL)
+        XCTAssertEqual(try store.drainSpool(into: &inbox), 1)
+        try store.saveInbox(inbox)
+
+        // Second delivery arrives after the first batch fully drained.
+        try store.writeStringInPlace(line + "\n", to: store.spoolURL)
+        XCTAssertEqual(try store.drainSpool(into: &inbox), 0)
+        let matches = inbox.allEntries().filter { $0.entry.text == "a twin delivery from the wrist" }
+        XCTAssertEqual(matches.count, 1)
+    }
+
+    func testIDDedupHoldsEvenWhenTextDedupCannot() throws {
+        // Prove the dedup is id-based: mangle the folded entry (as the owner
+        // editing it, or corruption, would), so day+minute+text can no longer
+        // match, then deliver the duplicate. It must still be dropped.
+        let store = try makeTempStore()
+        var inbox = try store.loadInbox()
+        let line = Spool.line(for: "original text", at: date("2026-08-17 09:27"), device: "Apple Watch", id: "DUP-2")
+        try store.writeStringInPlace(line + "\n", to: store.spoolURL)
+        XCTAssertEqual(try store.drainSpool(into: &inbox), 1)
+
+        for dayIndex in inbox.days.indices {
+            for entryIndex in inbox.days[dayIndex].entries.indices
+            where inbox.days[dayIndex].entries[entryIndex].text == "original text" {
+                inbox.days[dayIndex].entries[entryIndex].text = "edited by the owner"
+            }
+        }
+
+        try store.writeStringInPlace(line + "\n", to: store.spoolURL)
+        XCTAssertEqual(try store.drainSpool(into: &inbox), 0)
+        XCTAssertFalse(inbox.allEntries().contains { $0.entry.text == "original text" })
+    }
+
+    func testSameBatchDuplicateIDsFoldOnce() throws {
+        let store = try makeTempStore()
+        var inbox = try store.loadInbox()
+        let line = Spool.line(for: "double in one batch", at: date("2026-08-17 09:30"), device: "Apple Watch", id: "DUP-3")
+        try store.writeStringInPlace(line + "\n" + line + "\n", to: store.spoolURL)
+        XCTAssertEqual(try store.drainSpool(into: &inbox), 1)
+    }
+
+    func testCapturesWithoutIDsStillFoldAndTextDedupStillStands() throws {
+        // Negative test: nothing about the id machinery may break Shortcuts
+        // captures, which carry no id. Same stamp+text still dedupes.
+        let store = try makeTempStore()
+        var inbox = try store.loadInbox()
+        let line = Spool.line(for: "plain shortcuts capture", at: date("2026-08-17 09:35"))
+        try store.writeStringInPlace(line + "\n", to: store.spoolURL)
+        XCTAssertEqual(try store.drainSpool(into: &inbox), 1)
+        try store.writeStringInPlace(line + "\n", to: store.spoolURL)
+        XCTAssertEqual(try store.drainSpool(into: &inbox), 0)
+    }
+
+    func testSeenIDLedgerIsCappedAt500() throws {
+        let store = try makeTempStore()
+        store.recordSeenCaptureIDs((0..<600).map { "ID-\($0)" })
+        let seen = store.seenCaptureIDs()
+        XCTAssertEqual(seen.count, 500)
+        XCTAssertFalse(seen.contains("ID-99"))
+        XCTAssertTrue(seen.contains("ID-100"))
+        XCTAssertTrue(seen.contains("ID-599"))
+    }
+
+    // MARK: Null-byte corruption (bug 3, 2026-08-17: 588-null run in the live inbox)
+
+    func testStrippingNullsRemovesOnlyNulls() {
+        let dirty = "keep\u{0000}\u{0000} this · exactly\u{0000}\n[[unchanged]]"
+        XCTAssertEqual(LedgeFormat.strippingNulls(dirty), "keep this · exactly\n[[unchanged]]")
+        let clean = "no nulls here"
+        XCTAssertEqual(LedgeFormat.strippingNulls(clean), clean)
+    }
+
+    func testLoadInboxRepairsNullBytesAndCollapsesTheSmuggledDuplicate() throws {
+        // Byte-for-byte shape of the live 2026-08-17 corruption: a null run
+        // inside the first entry's body, between two copies of the same
+        // capture. The nulls made the entry texts unequal, which is how the
+        // duplicate got past fold's dedupe in the first place.
+        let store = try makeTempStore()
+        let nulls = String(repeating: "\u{0000}", count: 588)
+        let corrupted = "## 2026-08-17\n\n### 09:27 · Apple Watch\na twin delivery from the wrist\n\n"
+            + nulls
+            + "\n\n### 09:27 · Apple Watch\na twin delivery from the wrist\n\n### 08:49 · iPhone\nEarlier thought.\n"
+        try corrupted.write(to: store.inboxURL, atomically: true, encoding: .utf8)
+
+        let inbox = try store.loadInbox()
+        let texts = inbox.allEntries().map { $0.entry.text }
+        XCTAssertEqual(texts.filter { $0 == "a twin delivery from the wrist" }.count, 1)
+        XCTAssertTrue(texts.contains("Earlier thought."))
+        XCTAssertFalse(texts.contains { $0.contains("\u{0000}") })
+
+        // The live file is rewritten clean, and the repair survives a reload.
+        let onDisk = try XCTUnwrap(try store.readString(store.inboxURL))
+        XCTAssertFalse(onDisk.contains("\u{0000}"))
+        XCTAssertEqual(try store.loadInbox(), inbox)
+    }
+
+    func testCollapseExactDuplicatesKeepsDistinctEntries() {
+        var inbox = Inbox()
+        inbox.prepend(text: "same minute, different thought", at: date("2026-08-17 09:27"), device: "Apple Watch")
+        inbox.prepend(text: "twin", at: date("2026-08-17 09:27"), device: "Apple Watch")
+        inbox.prepend(text: "twin", at: date("2026-08-17 09:27"), device: "Apple Watch")
+        inbox.prepend(text: "twin", at: date("2026-08-17 09:27"), device: "iPhone")
+        XCTAssertEqual(inbox.collapseExactDuplicates(), 1)
+        XCTAssertEqual(inbox.allEntries().count, 3)
+    }
+
+    func testDrainClearsNullOnlySpoolInsteadOfCountingIt() throws {
+        let store = try makeTempStore()
+        var inbox = try store.loadInbox()
+        try store.writeStringInPlace(String(repeating: "\u{0000}", count: 64), to: store.spoolURL)
+        XCTAssertEqual(try store.drainSpool(into: &inbox), 0)
+        let after = ((try store.readString(store.spoolURL)) ?? nil) ?? ""
+        XCTAssertEqual(after, "")
+        // And the waiting-line math sees nothing, not a phantom capture.
+        XCTAssertEqual(Spool.status("\u{0000}\u{0000}", fallbackDate: date("2026-08-17 09:00")), .empty)
     }
 }

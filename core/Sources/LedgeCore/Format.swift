@@ -30,6 +30,15 @@ public enum LedgeFormat {
         line.range(of: "^### \\d{2}:\\d{2}( · .+)?\\s*$", options: .regularExpression) != nil
     }
 
+    /// Remove null bytes. Nulls are never legitimate Ledge content; they appear
+    /// only as corruption from interrupted or racing file writes (a 588-byte
+    /// null run landed in the live inbox on 2026-08-17). Every real character
+    /// is preserved.
+    public static func strippingNulls(_ text: String) -> String {
+        guard text.contains("\u{0000}") else { return text }
+        return text.replacingOccurrences(of: "\u{0000}", with: "")
+    }
+
     /// Trim leading and trailing whitespace-only lines, preserve interior blanks.
     public static func trimEdges(_ text: String) -> String {
         var lines = text.components(separatedBy: "\n")

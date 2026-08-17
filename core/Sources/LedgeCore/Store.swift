@@ -46,6 +46,9 @@ public final class LedgeStore {
     public var spoolURL: URL { captureURL.appendingPathComponent("drop.md") }
     public var stateURL: URL { root.appendingPathComponent(".ledge", isDirectory: true) }
     public var settingsURL: URL { stateURL.appendingPathComponent("settings.json") }
+    /// Capture ids already folded into the inbox, one per line, newest last.
+    /// Lives in the shared folder so every device drains against the same list.
+    public var seenCaptureIDsURL: URL { stateURL.appendingPathComponent("seen-capture-ids.txt") }
 
     /// Default notes folder: iCloud Drive/Ledge when iCloud Drive exists, else ~/Documents/Ledge.
     /// On iOS the app instead asks the user to pick a folder (document picker + bookmark).
@@ -121,8 +124,24 @@ public final class LedgeStore {
     // MARK: Inbox
 
     public func loadInbox() throws -> Inbox {
-        var inbox = Inbox.parse(try readString(inboxURL) ?? "")
+        let raw = try readString(inboxURL) ?? ""
+        let clean = LedgeFormat.strippingNulls(raw)
+        var inbox = Inbox.parse(clean)
+        var dirty = false
+        if clean != raw {
+            // Null-byte corruption (racing writes, 2026-08-17 incident): keep
+            // the damaged bytes recoverable, scrub the nulls, and collapse the
+            // exact-duplicate entries the corruption smuggled past fold's
+            // dedupe. The rewrite below goes through saveInbox, so it happens
+            // under NSFileCoordinator like every other inbox write.
+            snapshot(inboxURL)
+            inbox.collapseExactDuplicates()
+            dirty = true
+        }
         if reconcileConflictVersions(into: &inbox) > 0 {
+            dirty = true
+        }
+        if dirty {
             try? saveInbox(inbox)
         }
         return inbox
@@ -160,37 +179,110 @@ public final class LedgeStore {
     /// two devices at once can surface as two entries; that is deliberate,
     /// duplicates are recoverable and lost bytes are not.
     public func saveInbox(_ inbox: Inbox) throws {
+        try fm.createDirectory(at: inboxURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        #if canImport(Darwin)
+        // The stamp check, the merge, and the write all happen inside ONE
+        // coordinated write. The old shape (check, merge, then a separately
+        // coordinated write) left a window where another coordinated writer
+        // (the sync daemon applying an update from another device, or a second
+        // drain on this machine) could land bytes between our check and our
+        // write and be clobbered; that window is where the 2026-08-17
+        // corruption raced.
+        var coordinationError: NSError?
+        var innerError: Error?
+        NSFileCoordinator().coordinate(writingItemAt: inboxURL, options: .forMerging, error: &coordinationError) { actualURL in
+            do {
+                var outgoing = inbox
+                if let diskStamp = self.modificationDate(of: actualURL), diskStamp != self.readStamp(for: self.inboxURL) {
+                    self.snapshot(actualURL)
+                    guard let diskRaw = try? String(contentsOf: actualURL, encoding: .utf8) else {
+                        // Bytes exist on disk but cannot be read right now.
+                        // Refusing to write is the only safe move; captures
+                        // fall back to the spool or the pending queue and
+                        // nothing is lost.
+                        throw LedgeStoreError.notDownloaded(self.inboxURL)
+                    }
+                    var merged = Inbox.parse(LedgeFormat.strippingNulls(diskRaw))
+                    for item in outgoing.allEntries().reversed() {
+                        _ = merged.fold([(date: item.entry.timestamp, text: item.entry.text, device: item.entry.device)])
+                    }
+                    outgoing = merged
+                }
+                try outgoing.serialized().write(to: actualURL, atomically: true, encoding: .utf8)
+            } catch {
+                innerError = error
+            }
+        }
+        if let error = innerError { throw error }
+        if let error = coordinationError { throw error }
+        #else
         var outgoing = inbox
         if let diskStamp = modificationDate(of: inboxURL), diskStamp != readStamp(for: inboxURL) {
-            snapshot(inboxURL)
             guard let diskRaw = ((try? readString(inboxURL)) ?? nil) else {
-                // Bytes exist on disk but cannot be read right now. Refusing to
-                // write is the only safe move; captures fall back to the spool
-                // or the pending queue and nothing is lost.
                 throw LedgeStoreError.notDownloaded(inboxURL)
             }
-            var merged = Inbox.parse(diskRaw)
+            var merged = Inbox.parse(LedgeFormat.strippingNulls(diskRaw))
             for item in outgoing.allEntries().reversed() {
                 _ = merged.fold([(date: item.entry.timestamp, text: item.entry.text, device: item.entry.device)])
             }
             outgoing = merged
         }
-        try writeString(outgoing.serialized(), to: inboxURL)
+        try outgoing.serialized().write(to: inboxURL, atomically: true, encoding: .utf8)
+        #endif
         recordReadStamp(for: inboxURL)
     }
 
     /// Fold pending spool captures into the inbox and truncate the spool.
     /// Returns the number of captures folded. Caller saves the inbox afterwards.
+    ///
+    /// Captures carrying a delivery id (the watch relay stamps one) are folded
+    /// at most once ever: ids already in the seen-ids ledger are dropped, even
+    /// across separate drain batches on separate days or devices. This is what
+    /// makes the relay's deliver-at-least-once retries safe.
     @discardableResult
     public func drainSpool(into inbox: inout Inbox) throws -> Int {
         guard let raw = try readString(spoolURL), !LedgeFormat.trimEdges(raw).isEmpty else { return 0 }
         let fallback = modificationDate(of: spoolURL) ?? Date()
         let captures = Spool.parse(raw, fallbackDate: fallback)
-        guard !captures.isEmpty else { return 0 }
+        guard !captures.isEmpty else {
+            // Non-empty bytes that parse to nothing are corruption residue
+            // (e.g. a null-byte run); clear them so they never surface as a
+            // phantom waiting capture.
+            try truncateSpool(consumed: raw)
+            return 0
+        }
+        let seen = seenCaptureIDs()
+        let fresh = captures.filter { $0.id == nil || !seen.contains($0.id!) }
         snapshot(inboxURL)
-        let added = inbox.fold(captures)
+        let added = inbox.fold(fresh.map { (date: $0.date, text: $0.text, device: $0.device) })
         try truncateSpool(consumed: raw)
+        // Every id in the batch was consumed (folded, or skipped as a text
+        // duplicate of something already present), so all of them are seen.
+        recordSeenCaptureIDs(captures.compactMap(\.id))
         return added
+    }
+
+    /// The seen-ids ledger, read leniently: a missing or unreadable ledger
+    /// just means nothing is deduped by id this round, and fold's
+    /// day+minute+text dedupe still stands behind it.
+    func seenCaptureIDs() -> Set<String> {
+        guard let raw = ((try? readString(seenCaptureIDsURL)) ?? nil) else { return [] }
+        return Set(raw.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+    }
+
+    /// Append ids to the ledger, capped to the newest 500. Best effort: a
+    /// failed write degrades to text dedupe, it never blocks a drain.
+    func recordSeenCaptureIDs(_ ids: [String]) {
+        guard !ids.isEmpty else { return }
+        let existing = (((try? readString(seenCaptureIDsURL)) ?? nil) ?? "")
+            .components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        var combined = existing
+        let known = Set(existing)
+        for id in ids where !known.contains(id) {
+            combined.append(id)
+        }
+        let capped = combined.suffix(500).joined(separator: "\n") + "\n"
+        try? writeString(capped, to: seenCaptureIDsURL)
     }
 
     /// Clear exactly the spool content that was folded. Captures appended while

@@ -34,10 +34,11 @@ enum SpoolWriter {
     }
 
     /// Append one capture to capture/drop.md, falling back to the pending queue.
-    static func append(text: String, at date: Date, device: String? = nil) {
+    /// `id` is the watch relay's delivery id; drain dedupes repeat deliveries by it.
+    static func append(text: String, at date: Date, device: String? = nil, id: String? = nil) {
         let trimmed = LedgeFormat.trimEdges(text)
         guard !trimmed.isEmpty else { return }
-        let line = Spool.line(for: trimmed, at: date, device: device)
+        let line = Spool.line(for: trimmed, at: date, device: device, id: id)
 
         guard let resolved = resolveRoot() else {
             appendToPending(line)
