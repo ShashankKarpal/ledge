@@ -231,7 +231,10 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
     func refreshFromDiskIfClean() {
         guard case .inbox = mode, textView != nil, textView.string == lastSetEditorText else { return }
         let raw = ((try? store.readString(store.inboxURL)) ?? nil) ?? ""
-        if raw == lastSeenDiskRaw { return }
+        // A new out-of-app capture changes the spool without touching inbox.md,
+        // so the spool must be part of the "anything new?" check (iOS heartbeat parity).
+        let spoolRaw = ((try? store.readString(store.spoolURL)) ?? nil) ?? ""
+        if raw == lastSeenDiskRaw && LedgeFormat.trimEdges(spoolRaw).isEmpty { return }
         lastSeenDiskRaw = raw
         do {
             var inbox = try store.loadInbox()

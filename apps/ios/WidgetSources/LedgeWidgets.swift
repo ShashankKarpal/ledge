@@ -76,9 +76,15 @@ struct CaptureWidget: Widget {
 }
 
 struct LaunchCaptureIntent: AppIntent {
-    static var title: LocalizedStringResource = "Capture to Ledge"
+    // Deliberately NOT titled "Capture to Ledge": that name belongs to the
+    // spool-writing CaptureIntent in the app. Two identically named actions
+    // made Siri and the Shortcuts app ambiguous about which one to run.
+    // Hidden from discovery entirely; the Control Center button invokes it
+    // directly and does not need Shortcuts to list it.
+    static var title: LocalizedStringResource = "Open Ledge Capture"
     static var description = IntentDescription("Opens Ledge ready to capture a thought.")
     static var openAppWhenRun: Bool = true
+    static var isDiscoverable: Bool = false
 
     func perform() async throws -> some IntentResult & OpensIntent {
         .result(opensIntent: OpenURLIntent(URL(string: "ledge://capture")!))

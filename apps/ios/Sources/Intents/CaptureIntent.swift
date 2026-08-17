@@ -27,8 +27,15 @@ struct LedgeShortcuts: AppShortcutsProvider {
             intent: CaptureIntent(),
             phrases: [
                 "Add to \(.applicationName)",
-                "Capture to \(.applicationName)"
-            ]
+                "Capture to \(.applicationName)",
+                "Capture my thought in \(.applicationName)",
+                "Capture a thought in \(.applicationName)",
+                "Capture my thought with \(.applicationName)",
+                "Add a thought to \(.applicationName)",
+                "\(.applicationName), capture my thought"
+            ],
+            shortTitle: "Capture",
+            systemImageName: "square.and.pencil"
         )
     }
 }
