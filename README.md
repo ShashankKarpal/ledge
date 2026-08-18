@@ -11,11 +11,11 @@
 <p align="center"><b>An ADHD-first sidebar notepad for Mac, iPhone, iPad, and Apple Watch. Free, open source, local only.</b></p>
 
 <p align="center">
-  <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20iOS%20%C2%B7%20watchOS-BD4753?style=flat-square">
-  <img alt="Status" src="https://img.shields.io/badge/status-v0.4.1-BD4753?style=flat-square">
-  <img alt="Local only" src="https://img.shields.io/badge/local-only-BD4753?style=flat-square">
-  <img alt="Stack" src="https://img.shields.io/badge/built%20with-Swift-1C1B1D?style=flat-square">
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-1C1B1D?style=flat-square"></a>
+  <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20iOS%20%C2%B7%20watchOS-99612F?style=flat-square">
+  <img alt="Status" src="https://img.shields.io/badge/status-v0.4.1-99612F?style=flat-square">
+  <img alt="Local only" src="https://img.shields.io/badge/local-only-99612F?style=flat-square">
+  <img alt="Stack" src="https://img.shields.io/badge/built%20with-Swift-1A1917?style=flat-square">
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-1A1917?style=flat-square"></a>
 </p>
 
 ## What it does

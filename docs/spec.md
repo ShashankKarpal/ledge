@@ -82,18 +82,18 @@ Site stack: Next.js + Tailwind 3.4, shadcn-style CSS variables. Fonts: Geist (bo
 
 | Token | Role | Light | Dark |
 |---|---|---|---|
-| background | page | #F7F5F2 | #1C1B1D |
-| surface / card | elevated panel | #FCFBF8 | #28272A |
-| surface-2 / muted | chip, subtle panel | #F0ECE5 | #211F23 |
-| foreground | primary text | #1C1B1D | #F7F5F2 |
+| background | page | #F3F1EB | #0B0C0D |
+| surface / card | elevated panel | #FFFFFF | #171614 |
+| surface-2 / muted | chip, subtle panel | #EDEBE6 | #201E1B |
+| foreground | primary text | #0B0C0D | #F3F1EB |
 | muted-foreground | secondary text | #6D6774 | #C4C6CA |
-| border / input | hairlines | #E3DDE1 | #383638 |
-| rose (primary = accent = destructive, one hue for all three) | brand accent, focus ring, error | #BD4753 | #E78892 |
-| rose-hover | hover | #A33843 | #EFA9B0 |
-| sage | status dot, one syntax highlight | #367B23 | #A0D392 |
-| gold | price emphasis | #C28A0F | #E8B13B |
+| border / input | hairlines | #E2E0DA | #292826 |
+| rose (primary = accent = destructive, one hue for all three) | brand accent, focus ring, error | #99612F | #B17E51 |
+| rose-hover | hover | #7D4F26 | #C89A73 |
+| sage | status dot, one syntax highlight | #307A64 | #4FC4A6 |
+| gold | price emphasis | #695725 | #E0B93A |
 
-Fixed "pad" tokens (app mockups, footer, CTA are always dark regardless of site theme): pad-bg #1C1B1D, pad-surface #28272A, pad-heading #F7F5F2, pad-rose #E78892, pad-text #C4C6CA, pad-line #383638. Type: body 16px; fluid clamp() headings up to 80px; line-height 1.05 headings / 1.5-1.65 body; tracking -0.02em to -0.04em on headings. Spacing: 4px base grid, 1120px content width, 68px sticky frosted header (80% bg + 24px blur). Radii: 6px controls, 9-10px buttons, 14-18px frames, full pills. Shadows: minimal; one soft 0 30px 60px rgba(0,0,0,.4) under the hero. Buttons: flat, no shadow, mono 15px medium.
+Fixed "pad" tokens (app mockups, footer, CTA are always dark regardless of site theme): pad-bg #0B0C0D, pad-surface #171614, pad-heading #F3F1EB, pad-rose #B17E51, pad-text #C4C6CA, pad-line #292826. Type: body 16px; fluid clamp() headings up to 80px; line-height 1.05 headings / 1.5-1.65 body; tracking -0.02em to -0.04em on headings. Spacing: 4px base grid, 1120px content width, 68px sticky frosted header (80% bg + 24px blur). Radii: 6px controls, 9-10px buttons, 14-18px frames, full pills. Shadows: minimal; one soft 0 30px 60px rgba(0,0,0,.4) under the hero. Buttons: flat, no shadow, mono 15px medium.
 
 Character: calm, airy, text-forward, warm off-white, one desaturated accent doing nearly all color work, Linear/Raycast-style dark device frames. This is a good starting point; it is already 70% of an ADHD-calm palette.
 
@@ -103,17 +103,17 @@ Keep: the warm paper base, charcoal dark mode (not pure black), hairline borders
 
 | Token | Role | Light | Dark | Change vs SnappyNotes and rationale |
 |---|---|---|---|---|
-| bg | canvas | #F7F5F2 | #1C1B1D | Kept. Warm off-white kills glare; charcoal avoids OLED smear and harsh contrast |
-| surface | panel, cards | #FCFBF8 | #28272A | Kept |
-| surface-2 | pills, wells | #F0ECE5 | #211F23 | Kept |
-| text | body | #1C1B1D | #F7F5F2 | Kept. ~13:1 contrast where it matters most: the words |
+| bg | canvas | #F3F1EB | #0B0C0D | Kept. Warm off-white kills glare; charcoal avoids OLED smear and harsh contrast |
+| surface | panel, cards | #FFFFFF | #171614 | Kept |
+| surface-2 | pills, wells | #EDEBE6 | #201E1B | Kept |
+| text | body | #0B0C0D | #F3F1EB | Kept. ~13:1 contrast where it matters most: the words |
 | text-muted | timestamps, meta | #6D6774 | #C4C6CA | Kept. ~4.9:1, AA at meta sizes |
 | text-aged | entries drifting toward the Attic | #9B95A1 | #8E8F94 | NEW. Age fades content gently instead of flagging it; the anti-overdue color |
-| border | hairlines | #E3DDE1 | #383638 | Kept |
-| accent | THE one action color: primary action, focus ring, links, active caret line tint | #BD4753 | #E78892 | Kept hue, narrowed job. One accent = one obvious next action per view |
-| accent-hover | | #A33843 | #EFA9B0 | Kept |
-| done | checked boxes, capture-confirmed flick, success | #367B23 | #A0D392 | NEW ROLE. SnappyNotes barely uses its sage; we make it the trust color: saved, captured, done |
-| attention | sync conflict, genuine data issues only | #C28A0F | #E8B13B | NEW ROLE. Amber, in-surface, sentence-case text. Never a badge, never a count |
+| border | hairlines | #E2E0DA | #292826 | Kept |
+| accent | THE one action color: primary action, focus ring, links, active caret line tint | #99612F | #B17E51 | Kept hue, narrowed job. One accent = one obvious next action per view |
+| accent-hover | | #7D4F26 | #C89A73 | Kept |
+| done | checked boxes, capture-confirmed flick, success | #307A64 | #4FC4A6 | NEW ROLE. SnappyNotes barely uses its sage; we make it the trust color: saved, captured, done |
+| attention | sync conflict, genuine data issues only | #695725 | #E0B93A | NEW ROLE. Amber, in-surface, sentence-case text. Never a badge, never a count |
 | destructive | none | none | none | REMOVED as a color. No red states anywhere (RSD principle, 3.1 P9). Archive replaces delete; rare true deletes use plain text + confirm |
 | selection | text selection | accent at 18% | accent at 24% | Calm, on-brand |
 
