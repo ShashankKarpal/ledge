@@ -25,12 +25,12 @@ private extension UIColor {
 }
 
 extension Color {
-    static let ledgeBg = Color(uiColor: .ledgeDynamic(light: "#F7F5F2", dark: "#1C1B1D"))
-    static let ledgeSurface = Color(uiColor: .ledgeDynamic(light: "#FCFBF8", dark: "#28272A"))
-    static let ledgeText = Color(uiColor: .ledgeDynamic(light: "#1C1B1D", dark: "#F7F5F2"))
+    static let ledgeBg = Color(uiColor: .ledgeDynamic(light: "#F3F1EB", dark: "#0B0C0D"))
+    static let ledgeSurface = Color(uiColor: .ledgeDynamic(light: "#FFFFFF", dark: "#171614"))
+    static let ledgeText = Color(uiColor: .ledgeDynamic(light: "#0B0C0D", dark: "#F3F1EB"))
     static let ledgeTextMuted = Color(uiColor: .ledgeDynamic(light: "#6D6774", dark: "#C4C6CA"))
-    static let ledgeAccent = Color(uiColor: .ledgeDynamic(light: "#BD4753", dark: "#E78892"))
-    static let ledgeDone = Color(uiColor: .ledgeDynamic(light: "#367B23", dark: "#A0D392"))
-    static let ledgeAttention = Color(uiColor: .ledgeDynamic(light: "#C28A0F", dark: "#E8B13B"))
+    static let ledgeAccent = Color(uiColor: .ledgeDynamic(light: "#99612F", dark: "#B17E51"))
+    static let ledgeDone = Color(uiColor: .ledgeDynamic(light: "#307A64", dark: "#4FC4A6"))
+    static let ledgeAttention = Color(uiColor: .ledgeDynamic(light: "#695725", dark: "#E0B93A"))
     static let ledgeAged = Color(uiColor: .ledgeDynamic(light: "#9B95A1", dark: "#8E8F94"))
 }

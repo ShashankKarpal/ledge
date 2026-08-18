@@ -12,16 +12,16 @@ enum Theme {
         }
     }
 
-    static let bg = dynamic(light: "#F7F5F2", dark: "#1C1B1D")
-    static let surface = dynamic(light: "#FCFBF8", dark: "#28272A")
-    static let surface2 = dynamic(light: "#F0ECE5", dark: "#211F23")
-    static let text = dynamic(light: "#1C1B1D", dark: "#F7F5F2")
+    static let bg = dynamic(light: "#F3F1EB", dark: "#0B0C0D")
+    static let surface = dynamic(light: "#FFFFFF", dark: "#171614")
+    static let surface2 = dynamic(light: "#EDEBE6", dark: "#201E1B")
+    static let text = dynamic(light: "#0B0C0D", dark: "#F3F1EB")
     static let textMuted = dynamic(light: "#6D6774", dark: "#C4C6CA")
     static let textAged = dynamic(light: "#9B95A1", dark: "#8E8F94")
-    static let border = dynamic(light: "#E3DDE1", dark: "#383638")
-    static let accent = dynamic(light: "#BD4753", dark: "#E78892")
-    static let done = dynamic(light: "#367B23", dark: "#A0D392")
-    static let attention = dynamic(light: "#C28A0F", dark: "#E8B13B")
+    static let border = dynamic(light: "#E2E0DA", dark: "#292826")
+    static let accent = dynamic(light: "#99612F", dark: "#B17E51")
+    static let done = dynamic(light: "#307A64", dark: "#4FC4A6")
+    static let attention = dynamic(light: "#695725", dark: "#E0B93A")
 
     static let editorFont = NSFont.systemFont(ofSize: 15)
     static let metaFont = NSFont.systemFont(ofSize: 11, weight: .medium)
