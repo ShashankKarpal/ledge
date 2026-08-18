@@ -118,7 +118,7 @@ MARKS = {
         "s16": [R(22, 46, 52, 32, 9, rot=(-20, 22, 78)),
                 R(22, 46, 52, 32, 9, role="acc")],
     },
-    "uebersicht-claude-tokens": {
+    "claude-tokens": {
         "cat": "mist", "private": False, "display": "claude-tokens",
         "story": "stacks of coins, one loose on top",
         "master": ([R(14, y, 22, 7, 3.5, role="acc") for y in (65, 75)] +
