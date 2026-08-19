@@ -32,14 +32,17 @@ from fontTools.pens.svgPathPen import SVGPathPen
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "out")
 FONT_PATH = os.path.join(HERE, "..", "brand", "font", "KarpalGeometric-Regular.ttf")
+UI_FONT_PATH = os.path.join(HERE, "..", "brand", "font", "Montserrat-%s.ttf")
 
 PAL = {
     "dark": {"page": "#0B0C0D", "ink": "#F3F1EB",
              "copper": "#B17E51", "brass": "#BFB287", "mist": "#CFDFE8",
-             "quiet": "#8F8C85", "card": "#171614"},
+             "quiet": "#8F8C85", "card": "#171614",
+             "edge": "#292826", "edgeStrong": "#3A3833"},
     "light": {"page": "#F5F5F3", "ink": "#1A1917",
               "copper": "#99612F", "brass": "#4D4323", "mist": "#2D647F",
-              "quiet": "#5A5852", "card": "#FFFFFF"},
+              "quiet": "#5A5852", "card": "#FFFFFF",
+              "edge": "#E2E0DA", "edgeStrong": "#CDCAC2"},
 }
 GRAIN = {"dark": 0.16, "light": 0.07}
 
@@ -167,26 +170,24 @@ MARKS = {
         "s16": [R(20, 26, 26, 26, 8), R(20, 56, 26, 26, 8), R(54, 56, 26, 26, 8),
                 R(54, 16, 26, 26, 8, rot=(10, 67, 29))],
     },
-    "monogram": {
-        "cat": "copper", "private": True, "no_wordmark": True,
-        "story": "sk in Karpal Geometric with the copper period. never published",
-        "master": [G("M 32.8,51.1 A 11.5,11.5 0 1 0 24,70 A 11.5,11.5 0 1 1 15.2,88.9",
-                     "translate(10,5) scale(0.75)", sw=12),
-                   G("M 0,14 L 0,100 M 26,50 L 0,74 M 9,66 L 28,100",
-                     "translate(52,5) scale(0.75)", sw=12),
-                   C(84, 73, 7, role="acc")],
-        "s24": [G("M 32.8,51.1 A 11.5,11.5 0 1 0 24,70 A 11.5,11.5 0 1 1 15.2,88.9",
-                  "translate(10,5) scale(0.75)", sw=15),
-                G("M 0,14 L 0,100 M 26,50 L 0,74 M 9,66 L 28,100",
-                  "translate(52,5) scale(0.75)", sw=15),
-                C(85, 72, 9, role="acc")],
-        "s16": [G("M 32.8,51.1 A 11.5,11.5 0 1 0 24,70 A 11.5,11.5 0 1 1 15.2,88.9",
-                  "translate(8,5) scale(0.75)", sw=18),
-                G("M 0,14 L 0,100 M 26,50 L 0,74 M 9,66 L 28,100",
-                  "translate(52,5) scale(0.75)", sw=18),
-                C(86, 70, 11, role="acc")],
-    },
 }
+
+# private overlay ------------------------------------------------------------
+# Private marks (the monogram) are NEVER defined in this file. They live in
+# private_marks.py next to this script, which is gitignored in the public
+# repo and exists only on Shanky's machines and in the private ink-and-bone
+# mirror. Without the overlay, a public build simply cannot render them.
+# Incident record: BRAND-SURFACES.md, INCIDENT 2026-08-19.
+
+PRIVATE_OVERLAY = os.path.join(HERE, "private_marks.py")
+HAVE_PRIVATE = os.path.exists(PRIVATE_OVERLAY)
+if HAVE_PRIVATE:
+    _ns = {"R": R, "C": C, "P": P, "G": G}
+    with open(PRIVATE_OVERLAY) as _f:
+        exec(_f.read(), _ns)
+    for _k, _v in _ns.get("PRIVATE_MARKS", {}).items():
+        _v["private_overlay"] = True
+        MARKS[_k] = _v
 
 # svg emit ------------------------------------------------------------------
 
@@ -337,6 +338,221 @@ def wordmark_svg(project, theme, layout, ground=None):
     bg = '<rect width="%s" height="%s" fill="%s"/>' % (W, H, ground) if ground else ""
     return ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %.0f %.0f">%s%s</svg>'
             % (W, H, bg, body)), W, H
+
+_ui_fonts = {}
+
+def ui_font(weight):
+    name = {400: "Regular", 500: "Medium"}[weight]
+    if name not in _ui_fonts:
+        _ui_fonts[name] = TTFont(UI_FONT_PATH % name)
+    return _ui_fonts[name]
+
+def ui_text_paths(text, weight=400, em=100, tracking=0.0):
+    """Montserrat outlines, same shape as text_paths. font.ui in brand-tokens."""
+    f = ui_font(weight)
+    cmap = f.getBestCmap()
+    glyphs = f.getGlyphSet()
+    upem = f["head"].unitsPerEm
+    s = em / upem
+    x = 0.0
+    out = []
+    for ch in text:
+        gname = cmap.get(ord(ch))
+        if gname is None:
+            x += 0.35 * em
+            continue
+        pen = SVGPathPen(glyphs)
+        glyphs[gname].draw(pen)
+        d = pen.getCommands()
+        if d:
+            out.append('<g transform="translate(%.2f,0) scale(%.6f,-%.6f)">'
+                       '<path d="%s"/></g>' % (x, s, s, d))
+        x += glyphs[gname].width * s + tracking * em
+    return out, x
+
+# github avatar -------------------------------------------------------------
+# The profile avatar is a composite, not a 96-grid mark, so it lives here
+# rather than in MARKS. Layout is the v3 plate: contribution field behind a
+# terminal card holding the print, the shanky.md wordmark and three lines of
+# copy. The card is what keeps grain out from under sub-14px type, which
+# brand-tokens forbids.
+
+AVATAR = {
+    "grid_display": "shanky.md",
+    "copy": ("status: probably on a laptop",
+             "one commit at a time",
+             "#vibecoding at its best"),
+    "export": 460,          # GitHub serves 460 on the profile page
+    "grid": {"x0": -14, "y0": -14, "cols": 24, "rows": 24, "cell": 14,
+             "pitch": 18, "seed": 31},
+    "grid_opacity": {"dark": 0.42, "light": 0.50},
+}
+
+# one accent, copper stepped down toward the page of the active theme
+AVATAR_RAMP = {
+    "dark":  {"empty": "#26241F",
+              "levels": ["#4A3626", "#6E5236", "#916945", "#B17E51"]},
+    "light": {"empty": "#E6E4DF",
+              "levels": ["#DED0C2", "#C7AB91", "#B08660", "#99612F"]},
+}
+
+
+def avatar_grid(theme):
+    """GitHub-style density field, weighted so the recent side is busier"""
+    g = AVATAR["grid"]
+    ramp = AVATAR_RAMP[theme]
+    rnd = random.Random(g["seed"])
+    out = []
+    for c in range(g["cols"]):
+        recency = c / max(g["cols"] - 1, 1)
+        for r in range(g["rows"]):
+            if rnd.random() > 0.46 + 0.32 * recency:
+                fill = ramp["empty"]
+            else:
+                w = [0.40 - 0.20 * recency, 0.31,
+                     0.19 + 0.09 * recency, 0.10 + 0.11 * recency]
+                fill = rnd.choices(ramp["levels"], weights=w)[0]
+            out.append('<rect x="%.1f" y="%.1f" width="%s" height="%s" rx="%.1f" '
+                       'fill="%s"/>' % (g["x0"] + c * g["pitch"], g["y0"] + r * g["pitch"],
+                                        g["cell"], g["cell"], g["cell"] * 0.18, fill))
+    return '<g opacity="%s">%s</g>' % (AVATAR["grid_opacity"][theme], "".join(out))
+
+
+def avatar_print(theme, sw=7.5):
+    """the 3D print: head, eyes, neck stubs, plinth, shanky.md wordmark"""
+    p = PAL[theme]
+    size, top, cx = 72, 122, 200
+    ew, eh = size * 0.145, size * 0.215
+    ey, off = top + size * 0.40, size * 0.165
+    paths, tw = text_paths(AVATAR["grid_display"], em=100, tracking=0.02)
+    target = 98.0
+    s = target / tw
+    box_w = target + 36
+    ptop, ph = 202, 31
+    base = ptop + ph / 2 + 432 * (100 / 1000.0) * s / 2
+    return "".join([
+        '<g fill="none" stroke="%s" stroke-width="%s" stroke-linejoin="round">'
+        '<rect x="%.1f" y="%s" width="%s" height="%s" rx="%.1f"/>'
+        '<rect x="%.1f" y="%s" width="%.1f" height="%s" rx="9"/></g>'
+        % (p["ink"], sw, cx - size / 2, top, size, size, size * 0.135,
+           cx - box_w / 2, ptop, box_w, ph),
+        '<g fill="%s"><rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="%.1f"/>'
+        '<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="%.1f"/></g>'
+        % (p["ink"], cx - off - ew, ey, ew, eh, ew * 0.28,
+           cx + off, ey, ew, eh, ew * 0.28),
+        '<g fill="none" stroke="%s" stroke-width="%s" stroke-linecap="round">'
+        '<path d="M %s,194 L %s,202 M %s,194 L %s,202"/></g>'
+        % (p["ink"], sw, cx - 12, cx - 12, cx + 12, cx + 12),
+        '<g fill="%s" transform="translate(%.2f,%.2f) scale(%.6f)">%s</g>'
+        % (p["ink"], cx - target / 2, base, s, "".join(paths)),
+    ])
+
+
+def avatar_copy(theme):
+    """the three lines, Montserrat per font.ui, plus the laptop glyph"""
+    p = PAL[theme]
+    l1, l2, l3 = AVATAR["copy"]
+    out = []
+
+    gw, gap, em = 18.0, 7.0, 11.0
+    paths, tw = ui_text_paths(l1, 400, em=em, tracking=0.04)
+    total = gw + 5 + gap + tw
+    x0 = 200 - total / 2
+    gh = gw * 0.62
+    out.append('<g fill="none" stroke="%s" stroke-width="1.9" stroke-linecap="round" '
+               'stroke-linejoin="round"><rect x="%.1f" y="%.1f" width="%.1f" '
+               'height="%.1f" rx="2"/><path d="M %.1f,259 L %.1f,259"/></g>'
+               % (p["quiet"], x0, 259 - gh, gw, gh * 0.72, x0 - 2.5, x0 + gw + 2.5))
+    out.append('<g fill="%s" transform="translate(%.2f,258)">%s</g>'
+               % (p["quiet"], x0 + gw + 5 + gap, "".join(paths)))
+
+    for text, weight, em, tr, col, baseline in (
+            (l2, 500, 15.0, 0.02, p["ink"], 284),
+            (l3, 400, 10.5, 0.04, p["copper"], 307)):
+        paths, tw = ui_text_paths(text, weight, em=em, tracking=tr)
+        out.append('<g fill="%s" transform="translate(%.2f,%s)">%s</g>'
+                   % (col, 200 - tw / 2, baseline, "".join(paths)))
+    return "".join(out)
+
+
+def avatar_svg(theme, with_ground=True):
+    p = PAL[theme]
+    px = AVATAR["export"]
+    ground = ""
+    if with_ground:
+        ground = ('<rect width="400" height="400" fill="%s"/>'
+                  '<rect width="400" height="400" fill="%s" filter="url(#gr)" '
+                  'opacity="%s"/>' % (p["page"], p["ink"], GRAIN[theme]))
+    body = "".join([
+        avatar_grid(theme),
+        '<rect x="58" y="72" width="284" height="252" rx="12" fill="%s" stroke="%s" '
+        'stroke-width="2"/>' % (p["card"], p["edgeStrong"]),
+        "".join('<circle cx="%s" cy="92" r="4" fill="%s"/>' % (x, p["edgeStrong"])
+                for x in (78, 94, 110)),
+        '<path d="M 58,108 L 342,108" fill="none" stroke="%s" stroke-width="1.5"/>'
+        % p["edge"],
+        avatar_print(theme),
+        avatar_copy(theme),
+        '<circle cx="200" cy="200" r="197" fill="none" stroke="%s" stroke-width="3"/>'
+        % p["edgeStrong"],
+    ])
+    return ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" '
+            'width="%s" height="%s"><defs>'
+            '<clipPath id="disc"><circle cx="200" cy="200" r="200"/></clipPath>%s</defs>'
+            '<g clip-path="url(#disc)">%s%s</g></svg>'
+            % (px, px, GRAIN_FILTER % GRAIN[theme], ground, body))
+
+
+def avatar_png(theme, px):
+    """grain baked in PIL (cairosvg drops feTurbulence) and clipped to the disc,
+    so it never lands under the card or the sub-14px copy."""
+    from PIL import ImageDraw
+    p = PAL[theme]
+    disc = Image.new("L", (px, px), 0)
+    ImageDraw.Draw(disc).ellipse([0, 0, px - 1, px - 1], fill=255)
+    page = Image.new("RGBA", (px, px), tuple(int(p["page"][i:i + 2], 16)
+                                            for i in (1, 3, 5)) + (255,))
+    page.alpha_composite(grain_overlay((px, px), GRAIN[theme]))
+    out = Image.new("RGBA", (px, px), (0, 0, 0, 0))
+    out.paste(page, (0, 0), disc)
+    out.alpha_composite(png_bytes_to_img(
+        svg_to_png(avatar_svg(theme, with_ground=False), px)))
+    return out
+
+
+def build_avatar():
+    adir = os.path.join(OUT, "github", "avatar")
+    gh = os.path.join(HERE, "..", "github")
+    os.makedirs(adir, exist_ok=True)
+    os.makedirs(gh, exist_ok=True)
+    for theme in ("dark", "light"):
+        svg = avatar_svg(theme)
+        with open(os.path.join(adir, "avatar-%s.svg" % theme), "w") as f:
+            f.write(svg)
+        with open(os.path.join(gh, "avatar-%s.svg" % theme), "w") as f:
+            f.write(svg)
+        for px in (460, 400, 200, 80, 40, 20):
+            img = avatar_png(theme, px)
+            img.save(os.path.join(adir, "avatar-%s-%s.png" % (theme, px)))
+            if px == 460:
+                # the file you actually upload lives beside the other profile assets
+                img.save(os.path.join(gh, "avatar-%s-460.png" % theme))
+    with open(os.path.join(adir, "README.md"), "w") as f:
+        f.write("# GitHub profile avatar\n\n"
+                "Generated. Do not hand-edit. Rebuild with:\n\n"
+                "    python3 design/marks/generate_marks.py avatar\n\n"
+                "Layout: contribution field behind a terminal card holding the\n"
+                "shanky.md print, the wordmark and three lines of copy. The card\n"
+                "exists so grain never sits under type below 14px.\n\n"
+                "Upload avatar-light-460.png at github.com/settings/profile.\n"
+                "LIGHT is the live variant, Shanky's recorded call in\n"
+                "BRAND-SURFACES.md; do not upload the dark file unless he says\n"
+                "otherwise. The upload is manual and GitHub caches avatars hard\n"
+                "on its CDN, so verify in a private window, not a normal reload.\n\n"
+                "Note: the contribution field is copper. brand-tokens says the\n"
+                "profile repo stays ink; carrying copper here is a deliberate\n"
+                "owner decision recorded in BRAND-SURFACES.md, not a drift.\n")
+    print("  built avatar -> %s" % os.path.relpath(adir, HERE))
 
 # banners and social --------------------------------------------------------
 
@@ -522,7 +738,7 @@ PNG_SIZES = [1024, 512, 256, 128, 64, 48, 32, 24, 16]
 
 def build(project):
     m = MARKS[project]
-    pdir = os.path.join(OUT, "private" if m["private"] and project == "monogram" else "",
+    pdir = os.path.join(OUT, "private" if m.get("private_overlay") else "",
                         project)
     for sub in ("svg", "pdf", "png", "jpeg", "wordmark", "macos", "ios",
                 "watchos", "web", "appstore"):
@@ -636,17 +852,24 @@ def build(project):
     return sheet
 
 def main():
-    targets = sys.argv[1:] or list(MARKS.keys())
+    targets = sys.argv[1:] or list(MARKS.keys()) + ["avatar"]
     os.makedirs(OUT, exist_ok=True)
-    priv = os.path.join(OUT, "private")
-    os.makedirs(priv, exist_ok=True)
-    with open(os.path.join(priv, "README-PRIVATE.md"), "w") as f:
-        f.write("# PRIVATE. Do not publish.\n\nEverything in this folder is "
-                "personal and must never appear in a README, a repo, or any "
-                "public surface on GitHub. The monogram lives here by "
-                "Shanky's explicit instruction.\n")
+    if HAVE_PRIVATE:
+        priv = os.path.join(OUT, "private")
+        os.makedirs(priv, exist_ok=True)
+        with open(os.path.join(priv, "README-PRIVATE.md"), "w") as f:
+            f.write("# PRIVATE. Do not publish.\n\nEverything in this folder "
+                    "is personal and must never appear in a README, a repo, "
+                    "or any public surface on GitHub. The monogram lives "
+                    "here by Shanky's explicit instruction.\n")
     for p in targets:
-        build(p)
+        if p == "avatar":
+            build_avatar()
+        elif p not in MARKS:
+            print("  unknown target %r (private overlay missing?)" % p)
+            sys.exit(1)
+        else:
+            build(p)
 
 if __name__ == "__main__":
     main()

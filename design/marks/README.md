@@ -23,7 +23,7 @@ Dependencies: `pip install cairosvg pillow fonttools icnsutil`
 | `watchos/` | watch AppIcon.appiconset, complications (circular, extra large, graphic corner, graphic circular) as white monochrome templates |
 | `web/` | favicon.ico (16 32 48), favicon.svg (theme adaptive), README banners 1400x400 dark and light, social preview 1280x640, all with grain and category rail |
 | `appstore/` | AppStore-1024.png, no alpha, no rounded corners |
-| `contact-sheet.png` | one-glance review sheet |
+| `contact-sheet-<project>.png` | one-glance review sheet (the unsuffixed `contact-sheet.png` name is legacy; the pipeline deletes it on rebuild) |
 
 ## Rules encoded here
 
@@ -37,4 +37,4 @@ The `.icns` files are generated cross-platform by icnsutil. To rebuild natively 
 
 ## Private
 
-`out/private/` contains the monogram. It is never published, never linked, never referenced in any repo. See `out/private/README-PRIVATE.md`.
+`out/private/` contains the monogram renders and `private_marks.py` holds its geometry. Both are gitignored here and exist only on Shanky's machines and in the private ink-and-bone mirror. Without `private_marks.py` this pipeline cannot render the monogram at all, by design. Never publish, link, or reference either. See `out/private/README-PRIVATE.md` and BRAND-SURFACES.md, INCIDENT 2026-08-19.
