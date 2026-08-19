@@ -33,15 +33,17 @@ struct RootView: View {
                                 Image(systemName: "circle.dashed")
                             }
                         }
-                        // Only when the saved folder stopped resolving: a quiet way back.
-                        if !model.isConnected {
-                            ToolbarItem(placement: .navigationBarLeading) {
-                                Button {
-                                    showingRepicker = true
-                                } label: {
-                                    Image(systemName: "folder")
-                                }
+                        // Always available: change or re-pick the notes folder.
+                        // A reinstall can kill the bookmark while the app still
+                        // believes it is connected, so this must never be gated
+                        // on connection state (learned 2026-08-19).
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button {
+                                showingRepicker = true
+                            } label: {
+                                Image(systemName: model.isConnected ? "folder" : "folder.badge.questionmark")
                             }
+                            .accessibilityLabel("Change notes folder")
                         }
                     }
                     .sheet(isPresented: $showingRepicker) {

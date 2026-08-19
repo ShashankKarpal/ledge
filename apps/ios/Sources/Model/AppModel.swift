@@ -74,7 +74,14 @@ final class AppModel: ObservableObject {
             notice = "Ledge lost access to your folder. Pick it again when you have a moment."
             return
         }
-        _ = url.startAccessingSecurityScopedResource()
+        // A reinstall can invalidate the security scope even when the bookmark
+        // still resolves to a URL. Treat failed access as disconnected instead
+        // of pressing on with a folder we cannot actually read (2026-08-19).
+        guard url.startAccessingSecurityScopedResource() else {
+            isConnected = false
+            notice = "Ledge lost access to your folder. Tap the folder icon and pick it again."
+            return
+        }
         if stale, let fresh = try? url.bookmarkData(
             options: [],
             includingResourceValuesForKeys: nil,
@@ -126,7 +133,11 @@ final class AppModel: ObservableObject {
             isConnected = true
             notice = nil
         } catch {
-            notice = "Ledge could not read your folder just now. Pull to refresh to try again."
+            // Reads failing means we are NOT connected, whatever we believed
+            // before. Leaving isConnected true here hid the re-pick path for
+            // an entire morning (2026-08-19).
+            isConnected = false
+            notice = "Ledge could not read your folder. Tap the folder icon and pick it again."
         }
         updateWaitingLine()
     }
