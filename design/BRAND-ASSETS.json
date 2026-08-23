@@ -1,0 +1,266 @@
+{
+  "assets": [
+    {
+      "destination": "apps/ios/Sources/Assets.xcassets/AppIcon.appiconset/AppIcon-dark.png",
+      "destinationSha256": "63cc797cb7e9fde8f9af328a2a64996a71af358059cc8d5f25615fcfd122532b",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/ios/AppIcon.appiconset/icon-1024@1x.png",
+      "sourceSha256": "63cc797cb7e9fde8f9af328a2a64996a71af358059cc8d5f25615fcfd122532b"
+    },
+    {
+      "destination": "apps/ios/Sources/Assets.xcassets/AppIcon.appiconset/AppIcon-light.png",
+      "destinationSha256": "63cc797cb7e9fde8f9af328a2a64996a71af358059cc8d5f25615fcfd122532b",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/ios/AppIcon.appiconset/icon-1024@1x.png",
+      "sourceSha256": "63cc797cb7e9fde8f9af328a2a64996a71af358059cc8d5f25615fcfd122532b"
+    },
+    {
+      "destination": "apps/ios/Sources/Assets.xcassets/AppIcon.appiconset/AppIcon-tinted.png",
+      "destinationSha256": "63cc797cb7e9fde8f9af328a2a64996a71af358059cc8d5f25615fcfd122532b",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/ios/AppIcon.appiconset/icon-1024@1x.png",
+      "sourceSha256": "63cc797cb7e9fde8f9af328a2a64996a71af358059cc8d5f25615fcfd122532b"
+    },
+    {
+      "destination": "apps/ios/WatchSources/Assets.xcassets/AppIcon.appiconset/AppIcon-appLauncher-38mm-80.png",
+      "destinationSha256": "9565493b482e90414147096a5317525df1a0200e2ce48f654a77f101deedafdf",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/watchos/AppIcon.appiconset/icon-40@2x.png",
+      "sourceSha256": "9565493b482e90414147096a5317525df1a0200e2ce48f654a77f101deedafdf"
+    },
+    {
+      "destination": "apps/ios/WatchSources/Assets.xcassets/AppIcon.appiconset/AppIcon-appLauncher-40mm-88.png",
+      "destinationSha256": "ff5397cd98253d4da56b953ddc0ec3615b8c432bd314127ebd5c3e2d66a4b2a6",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/watchos/AppIcon.appiconset/icon-44@2x.png",
+      "sourceSha256": "ff5397cd98253d4da56b953ddc0ec3615b8c432bd314127ebd5c3e2d66a4b2a6"
+    },
+    {
+      "destination": "apps/ios/WatchSources/Assets.xcassets/AppIcon.appiconset/AppIcon-appLauncher-44mm-100.png",
+      "destinationSha256": "6c4a982df95641d859f3d4ac0adb5819fba65d6c4d055f251fb8f1fb8ddd3c18",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/watchos/AppIcon.appiconset/icon-50@2x.png",
+      "sourceSha256": "6c4a982df95641d859f3d4ac0adb5819fba65d6c4d055f251fb8f1fb8ddd3c18"
+    },
+    {
+      "destination": "apps/ios/WatchSources/Assets.xcassets/AppIcon.appiconset/AppIcon-companionSettings-any-58.png",
+      "destinationSha256": "bf883cedf8d38f1d9eed407091ab302487f56418e9e2c47f9a5635fc9220693a",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/watchos/AppIcon.appiconset/icon-29@2x.png",
+      "sourceSha256": "bf883cedf8d38f1d9eed407091ab302487f56418e9e2c47f9a5635fc9220693a"
+    },
+    {
+      "destination": "apps/ios/WatchSources/Assets.xcassets/AppIcon.appiconset/AppIcon-companionSettings-any-87.png",
+      "destinationSha256": "9208235974a3925760e6f718ce3fb05826c08ec0f0f682bcd5b7ca6b929a4a73",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/watchos/AppIcon.appiconset/icon-29@3x.png",
+      "sourceSha256": "9208235974a3925760e6f718ce3fb05826c08ec0f0f682bcd5b7ca6b929a4a73"
+    },
+    {
+      "destination": "apps/ios/WatchSources/Assets.xcassets/AppIcon.appiconset/AppIcon-marketing-1024.png",
+      "destinationSha256": "63cc797cb7e9fde8f9af328a2a64996a71af358059cc8d5f25615fcfd122532b",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/watchos/AppIcon.appiconset/icon-1024@1x.png",
+      "sourceSha256": "63cc797cb7e9fde8f9af328a2a64996a71af358059cc8d5f25615fcfd122532b"
+    },
+    {
+      "destination": "apps/ios/WatchSources/Assets.xcassets/AppIcon.appiconset/AppIcon-notificationCenter-38mm-48.png",
+      "destinationSha256": "94327e0d45c1c31861d756da4286638fa587ac1fd4da6af83a4638071b914be6",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/watchos/AppIcon.appiconset/icon-24@2x.png",
+      "sourceSha256": "94327e0d45c1c31861d756da4286638fa587ac1fd4da6af83a4638071b914be6"
+    },
+    {
+      "destination": "apps/ios/WatchSources/Assets.xcassets/AppIcon.appiconset/AppIcon-quickLook-38mm-172.png",
+      "destinationSha256": "887780f9e97d7d4a606ef6e6ceab20604d1124f6947aec5821453013be8d860d",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/watchos/AppIcon.appiconset/icon-86@2x.png",
+      "sourceSha256": "887780f9e97d7d4a606ef6e6ceab20604d1124f6947aec5821453013be8d860d"
+    },
+    {
+      "destination": "apps/ios/WatchSources/Assets.xcassets/AppIcon.appiconset/AppIcon-quickLook-42mm-196.png",
+      "destinationSha256": "1aa3805ea2ea84e686849ce940b31cb015f68142faef53de6397aca9c5dfd378",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/watchos/AppIcon.appiconset/icon-98@2x.png",
+      "sourceSha256": "1aa3805ea2ea84e686849ce940b31cb015f68142faef53de6397aca9c5dfd378"
+    },
+    {
+      "destination": "apps/ios/WatchSources/Assets.xcassets/AppIcon.appiconset/AppIcon-quickLook-44mm-216.png",
+      "destinationSha256": "eb04953cc92e080f15ae5ad3757eacdd47bc2d9f6b8c1a090be26718f044eeb7",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/watchos/AppIcon.appiconset/icon-108@2x.png",
+      "sourceSha256": "eb04953cc92e080f15ae5ad3757eacdd47bc2d9f6b8c1a090be26718f044eeb7"
+    },
+    {
+      "destination": "apps/mac/Resources/Ledge.iconset/icon_128x128.png",
+      "destinationSha256": "c706d97a2c9d3564c23bc737744f2f206625e3946c35d64006c1c3b0d41ceb1f",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/macos/AppIcon.iconset/icon_128x128.png",
+      "sourceSha256": "c706d97a2c9d3564c23bc737744f2f206625e3946c35d64006c1c3b0d41ceb1f"
+    },
+    {
+      "destination": "apps/mac/Resources/Ledge.iconset/icon_128x128@2x.png",
+      "destinationSha256": "a4642841739f8b7d10b37fca4bb02b2c7e36c1d2844d60436370005a7d63d728",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/macos/AppIcon.iconset/icon_128x128@2x.png",
+      "sourceSha256": "a4642841739f8b7d10b37fca4bb02b2c7e36c1d2844d60436370005a7d63d728"
+    },
+    {
+      "destination": "apps/mac/Resources/Ledge.iconset/icon_16x16.png",
+      "destinationSha256": "500cc92e94e5edcc4a2853ba6670281d5a46ed246217dbb60286ed15ff096fb7",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/macos/AppIcon.iconset/icon_16x16.png",
+      "sourceSha256": "500cc92e94e5edcc4a2853ba6670281d5a46ed246217dbb60286ed15ff096fb7"
+    },
+    {
+      "destination": "apps/mac/Resources/Ledge.iconset/icon_16x16@2x.png",
+      "destinationSha256": "6a686eaf5f7e5d185cd287ca9e5eb60e955d997f2d8381739f997a8653356413",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/macos/AppIcon.iconset/icon_16x16@2x.png",
+      "sourceSha256": "6a686eaf5f7e5d185cd287ca9e5eb60e955d997f2d8381739f997a8653356413"
+    },
+    {
+      "destination": "apps/mac/Resources/Ledge.iconset/icon_256x256.png",
+      "destinationSha256": "a4642841739f8b7d10b37fca4bb02b2c7e36c1d2844d60436370005a7d63d728",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/macos/AppIcon.iconset/icon_256x256.png",
+      "sourceSha256": "a4642841739f8b7d10b37fca4bb02b2c7e36c1d2844d60436370005a7d63d728"
+    },
+    {
+      "destination": "apps/mac/Resources/Ledge.iconset/icon_256x256@2x.png",
+      "destinationSha256": "07d61e35d3fa07dc799816248be0f1cc3f74bb7736cfe741c5fb07685c76edaf",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/macos/AppIcon.iconset/icon_256x256@2x.png",
+      "sourceSha256": "07d61e35d3fa07dc799816248be0f1cc3f74bb7736cfe741c5fb07685c76edaf"
+    },
+    {
+      "destination": "apps/mac/Resources/Ledge.iconset/icon_32x32.png",
+      "destinationSha256": "6a686eaf5f7e5d185cd287ca9e5eb60e955d997f2d8381739f997a8653356413",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/macos/AppIcon.iconset/icon_32x32.png",
+      "sourceSha256": "6a686eaf5f7e5d185cd287ca9e5eb60e955d997f2d8381739f997a8653356413"
+    },
+    {
+      "destination": "apps/mac/Resources/Ledge.iconset/icon_32x32@2x.png",
+      "destinationSha256": "a7b56ddecfdffee1be707bcae400a37cbbc1ccf8a25f868233a1693e515eea3e",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/macos/AppIcon.iconset/icon_32x32@2x.png",
+      "sourceSha256": "a7b56ddecfdffee1be707bcae400a37cbbc1ccf8a25f868233a1693e515eea3e"
+    },
+    {
+      "destination": "apps/mac/Resources/Ledge.iconset/icon_512x512.png",
+      "destinationSha256": "07d61e35d3fa07dc799816248be0f1cc3f74bb7736cfe741c5fb07685c76edaf",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/macos/AppIcon.iconset/icon_512x512.png",
+      "sourceSha256": "07d61e35d3fa07dc799816248be0f1cc3f74bb7736cfe741c5fb07685c76edaf"
+    },
+    {
+      "destination": "apps/mac/Resources/Ledge.iconset/icon_512x512@2x.png",
+      "destinationSha256": "a95f3e5bf8f5d86a8709469058d51d2e8c1b2ddf70744fdf7da24ec9b26bbd61",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/macos/AppIcon.iconset/icon_512x512@2x.png",
+      "sourceSha256": "a95f3e5bf8f5d86a8709469058d51d2e8c1b2ddf70744fdf7da24ec9b26bbd61"
+    },
+    {
+      "destination": "design/github/readme-banner-dark-1400x400.png",
+      "destinationSha256": "b1039147b04429a616c20840aa72d7c295ca177825b9fc3381c308b3921636d5",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/web/banner-dark-1400x400.png",
+      "sourceSha256": "b1039147b04429a616c20840aa72d7c295ca177825b9fc3381c308b3921636d5"
+    },
+    {
+      "destination": "design/github/readme-banner-dark-1400x400.svg",
+      "destinationSha256": "517200650f49ed71c73054e4e61ebef473f8c091f34aec576c2942779c2d866c",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/web/banner-dark-1400x400.svg",
+      "sourceSha256": "517200650f49ed71c73054e4e61ebef473f8c091f34aec576c2942779c2d866c"
+    },
+    {
+      "destination": "design/github/readme-banner-light-1400x400.png",
+      "destinationSha256": "5276d407a84f0190753e926d113a01e21a1d12c804104385b677c0ef4b456b13",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/web/banner-light-1400x400.png",
+      "sourceSha256": "5276d407a84f0190753e926d113a01e21a1d12c804104385b677c0ef4b456b13"
+    },
+    {
+      "destination": "design/github/readme-banner-light-1400x400.svg",
+      "destinationSha256": "99ff7f0af89b47c0a3caedaeba1775e1a29a70645bf8b55bd4be1b9de9d52d58",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/web/banner-light-1400x400.svg",
+      "sourceSha256": "99ff7f0af89b47c0a3caedaeba1775e1a29a70645bf8b55bd4be1b9de9d52d58"
+    },
+    {
+      "destination": "design/github/social-preview-1280x640.png",
+      "destinationSha256": "914b69a5cfbd6cf8f53f2bc2c2276eb939b1d3fe2893c81845cf500df6f07478",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/web/social-preview-1280x640.png",
+      "sourceSha256": "914b69a5cfbd6cf8f53f2bc2c2276eb939b1d3fe2893c81845cf500df6f07478"
+    },
+    {
+      "destination": "design/logo/ledge-lockup-horizontal-dark.svg",
+      "destinationSha256": "e43619ada85ef4c70ac8c6715fe2aad3a27b859af3668e4b78e4b6238443c208",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/wordmark/wordmark-horizontal-dark.svg",
+      "sourceSha256": "e43619ada85ef4c70ac8c6715fe2aad3a27b859af3668e4b78e4b6238443c208"
+    },
+    {
+      "destination": "design/logo/ledge-lockup-horizontal.svg",
+      "destinationSha256": "0adbcc297f8d48fa27d2d4474e249d16ada67608453712d06fd89c3628b8cffb",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/wordmark/wordmark-horizontal-light.svg",
+      "sourceSha256": "0adbcc297f8d48fa27d2d4474e249d16ada67608453712d06fd89c3628b8cffb"
+    },
+    {
+      "destination": "design/logo/ledge-lockup-stacked-dark.svg",
+      "destinationSha256": "b347f160368de5bbfb66fb723cb2dca812d8ee06d88ef1306de494ee4164e78b",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/wordmark/wordmark-stacked-dark.svg",
+      "sourceSha256": "b347f160368de5bbfb66fb723cb2dca812d8ee06d88ef1306de494ee4164e78b"
+    },
+    {
+      "destination": "design/logo/ledge-lockup-stacked.svg",
+      "destinationSha256": "c69ed251d32f7ad7f08b15fd1db2d0f7c04e84992a9523a462442b157e7f020a",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/wordmark/wordmark-stacked-light.svg",
+      "sourceSha256": "c69ed251d32f7ad7f08b15fd1db2d0f7c04e84992a9523a462442b157e7f020a"
+    },
+    {
+      "destination": "design/logo/ledge-symbol-dark.svg",
+      "destinationSha256": "b00757d9441a4c0c5a9d4c46b917cd28ee681812d8909b228522e8647acf2c99",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/svg/mark.svg",
+      "sourceSha256": "b00757d9441a4c0c5a9d4c46b917cd28ee681812d8909b228522e8647acf2c99"
+    },
+    {
+      "destination": "design/logo/ledge-symbol-mono-black.svg",
+      "destinationSha256": "c447563d5a3da556a78fe47c73c8e7e9da9673cdf2c2b29ae6ab8e79a37e32ac",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/svg/mark-mono.svg",
+      "sourceSha256": "c447563d5a3da556a78fe47c73c8e7e9da9673cdf2c2b29ae6ab8e79a37e32ac"
+    },
+    {
+      "destination": "design/logo/ledge-symbol.svg",
+      "destinationSha256": "0c87c7a0369b03ff73e4d361bbc21a106f77eb3e46081099929506745bb08080",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/svg/mark-light.svg",
+      "sourceSha256": "0c87c7a0369b03ff73e4d361bbc21a106f77eb3e46081099929506745bb08080"
+    },
+    {
+      "destination": "design/web/favicon.svg",
+      "destinationSha256": "b56fffba8d541c323000eceb4eff9a8cdf0637be8ee53271e09684ad96e54d49",
+      "mode": "copy",
+      "source": "design/marks/out/ledge/web/favicon.svg",
+      "sourceSha256": "b56fffba8d541c323000eceb4eff9a8cdf0637be8ee53271e09684ad96e54d49"
+    }
+  ],
+  "brandVersion": "1.1.0",
+  "canonicalSourceCommit": "31d19c52a2565d0f4ba200ecde6be8b32af6b1f4",
+  "canonicalSourceDirty": true,
+  "contentSetSha256": "b4d533595c1a757f68760af3c5037d7d66570799b41b2596def88a81467fb54b",
+  "generatorSha256": "0e6a2b10c9b320f5edb2c351e69d3aab55391d372a338dd62f792ce7f8974701",
+  "lockSha256": "d8574f93ee9b99d1758cfbb20da047518e49df75c0cd8a5ac5697b397542a802",
+  "project": "ledge",
+  "schemaVersion": 1,
+  "tokenSha256": "4436a3733ac7810580b0c586b7c044e8bb737c25e21ec33176127095f4bf6f23",
+  "visibility": "public"
+}
