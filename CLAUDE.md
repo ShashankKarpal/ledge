@@ -74,8 +74,10 @@ check here first.
 
 ## Where prior history lives (do not reconstruct from scratch)
 
-- Live cross-session state, read first: ../claude-bridge/handoffs/ledge.md
-  (write or refresh it at session end, always).
+- Live cross-session state, read first: this project's handoff file in the
+  fleet's private cross-session handoff repo; the fleet root CLAUDE.md (one
+  directory up) names that repo and its handoffs/ path. Write or refresh
+  the handoff at session end, always.
 - Session logs: ../_claude-chats/ (kk1 and kk2 subfolders; filenames contain
   "ledge").
 - Knowledge dumps v1 to v5, the densest project reasoning, deliberately purged
