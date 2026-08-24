@@ -1,0 +1,10 @@
+# Gitleaks repo config. Extends the default ruleset.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Brand provenance files: tokenSha256 is the checksum of the design tokens file written by the brand distributor, not a credential"
+paths = [
+  '''design/BRAND-ASSETS\.json$''',
+  '''design/BRAND-ASSETS\.md$''',
+]
