@@ -204,17 +204,31 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
         saveWork?.cancel()
         guard editorPopulated, textView != nil else { return }
         if textView.string == lastSetEditorText { return }
-        switch mode {
-        case .inbox:
-            var inbox = Inbox.parse(textView.string)
-            inbox.removeEmptyEntries()
-            try? store.saveInbox(inbox)
+        // lastSetEditorText moves only after a successful write. The old code
+        // set it unconditionally, so a failed save (iCloud placeholder, disk
+        // full) was treated as saved, later commits skipped the text, and the
+        // next summon reloaded from disk and discarded it (audit 2026-09-02).
+        do {
+            switch mode {
+            case .inbox:
+                var inbox = Inbox.parse(textView.string)
+                inbox.removeEmptyEntries()
+                try store.saveInbox(inbox)
+            case .note(let url):
+                try store.saveNote(textView.string, to: url)
+            }
             lastSetEditorText = textView.string
-        case .note(let url):
-            try? store.saveNote(textView.string, to: url)
-            lastSetEditorText = textView.string
+            saveFailed = false
+        } catch {
+            saveFailed = true
+            headerLabel.stringValue = "not saved yet, will retry"
+            headerLabel.textColor = Theme.attention
         }
     }
+
+    /// True while the most recent commit failed; dismiss() shows the failure
+    /// instead of the capture-confirmation flick.
+    private(set) var saveFailed = false
 
     func focusEditor() {
         view.window?.makeFirstResponder(textView)
@@ -222,6 +236,11 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
 
     /// The capture-confirmation flick: a quiet check in the done color while the panel tucks.
     func showTuckedConfirmation() {
+        if saveFailed {
+            headerLabel.stringValue = "not saved yet, will retry"
+            headerLabel.textColor = Theme.attention
+            return
+        }
         headerLabel.stringValue = "✓ captured"
         headerLabel.textColor = Theme.done
     }

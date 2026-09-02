@@ -30,6 +30,19 @@ public enum LedgeFormat {
         line.range(of: "^### \\d{2}:\\d{2}( · .+)?\\s*$", options: .regularExpression) != nil
     }
 
+    /// Defuse lines inside captured text that the parsers would otherwise read
+    /// as structure: a day header, an entry header, or a spool capture marker.
+    /// Shared web pages, Shortcut input and Watch relay text are untrusted;
+    /// without this a pasted `### 09:00 · iPhone` split an entry and forged its
+    /// attribution, and a `[[2020-01-01 00:00 ...]]` line forged a past capture
+    /// that the Attic then buried (audit 2026-09-02). A zero-width space in
+    /// front keeps the text visually identical and the regexes cold.
+    public static func escapingStructure(_ text: String) -> String {
+        text.components(separatedBy: "\n").map { line in
+            (isDayHeader(line) || isEntryHeader(line) || line.hasPrefix("[[")) ? "\u{200B}" + line : line
+        }.joined(separator: "\n")
+    }
+
     /// Remove null bytes. Nulls are never legitimate Ledge content; they appear
     /// only as corruption from interrupted or racing file writes (a 588-byte
     /// null run landed in the live inbox on 2026-08-17). Every real character

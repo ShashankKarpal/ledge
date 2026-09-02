@@ -4,7 +4,13 @@
 import Foundation
 
 public struct Entry: Identifiable {
-    public let id = UUID()
+    /// Derived, not random: the inbox is re-parsed every two seconds on iOS and
+    /// a fresh UUID per parse made SwiftUI rebuild the whole list each tick
+    /// (lost scroll position, animation churn). Minute stamp, device and text
+    /// identify an entry as well as the file format itself can.
+    public var id: String {
+        LedgeFormat.spoolFormatter.string(from: timestamp) + "|" + (device ?? "") + "|" + String(text.hashValue)
+    }
     public var timestamp: Date
     public var text: String
     /// Which device captured this entry (iPhone, iPad, Apple Watch, a Mac name). Optional.
@@ -155,7 +161,7 @@ public struct Inbox: Equatable {
     public mutating func prepend(text: String, at date: Date, device: String? = nil) {
         let stamp = LedgeFormat.minutePrecision(date)
         let dayKey = LedgeFormat.dayFormatter.string(from: stamp)
-        let entry = Entry(timestamp: stamp, text: LedgeFormat.trimEdges(text), device: device)
+        let entry = Entry(timestamp: stamp, text: LedgeFormat.escapingStructure(LedgeFormat.trimEdges(text)), device: device)
 
         if let dayIndex = days.firstIndex(where: { $0.day == dayKey }) {
             let insertAt = days[dayIndex].entries.firstIndex(where: { $0.timestamp <= entry.timestamp })

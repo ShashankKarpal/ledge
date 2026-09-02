@@ -40,7 +40,8 @@ final class AppModel: ObservableObject {
 
     /// Called from the folder picker. Bookmarks the folder and opens it.
     func connectFolder(url: URL) {
-        _ = url.startAccessingSecurityScopedResource()
+        // The picker coordinator already started scoped access for this URL;
+        // starting it a second time leaked one access per connect (audit 2026-09-02).
         do {
             let bookmark = try url.bookmarkData(
                 options: [],
@@ -92,7 +93,17 @@ final class AppModel: ObservableObject {
         openRoot(url)
     }
 
+    /// The root whose security scope this model currently holds. iOS caps
+    /// concurrent scoped accesses per process; every openRoot used to start a
+    /// new one and never stop the old, so a few reconnects exhausted the cap
+    /// and the app showed "lost access" until relaunch.
+    private var scopedRoot: URL?
+
     private func openRoot(_ url: URL) {
+        if let previous = scopedRoot, previous != url {
+            previous.stopAccessingSecurityScopedResource()
+        }
+        scopedRoot = url
         rootURL = url
         let store = LedgeStore(root: url)
         self.store = store
@@ -273,16 +284,24 @@ final class AppModel: ObservableObject {
     private func reconcileJournal(into loaded: inout Inbox) -> Int {
         let items = journalItems()
         guard !items.isEmpty else { return 0 }
+        // Presence is keyed on minute stamp plus device, not on the exact text:
+        // an own capture that was edited on the Mac is still that capture, and
+        // matching on text re-added the original as a duplicate for seven days.
+        // A capture deleted elsewhere is recognised the same way: if the inbox
+        // on disk is newer than the capture by two minutes and the entry is
+        // absent, another device already saw and removed it (audit 2026-09-02).
         let present = Set(loaded.allEntries().map { pair in
-            LedgeFormat.spoolFormatter.string(from: pair.entry.timestamp) + "|" + pair.entry.text
+            LedgeFormat.spoolFormatter.string(from: pair.entry.timestamp) + "|" + (pair.entry.device ?? "")
         })
+        let inboxStamp = store.flatMap { $0.modificationDate(of: $0.inboxURL) }
         var folded = 0
         var remaining: [[String: String]] = []
         let cutoff = Date().addingTimeInterval(-7 * 24 * 3600)
         for item in items {
             guard let stampString = item["stamp"], let text = item["text"],
                   let stamp = LedgeFormat.spoolFormatter.date(from: stampString) else { continue }
-            if present.contains(stampString + "|" + text) { continue }
+            if present.contains(stampString + "|" + Self.deviceName) { continue }
+            if let inboxStamp, inboxStamp > stamp.addingTimeInterval(120) { continue }
             if stamp < cutoff { continue }
             folded += loaded.fold([(date: stamp, text: text, device: Self.deviceName)])
             remaining.append(item)

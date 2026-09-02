@@ -32,6 +32,36 @@ final class LedgeCoreTests: XCTestCase {
         XCTAssertFalse(LedgeFormat.isEntryHeader("## 09:42"))
     }
 
+    func testCapturedTextCannotForgeStructure() {
+        // A shared page or Shortcut input containing header-shaped lines must
+        // stay one entry with its real attribution (audit 2026-09-02).
+        var inbox = Inbox.parse("## 2026-07-19\n### 09:00 · iPhone\nreal entry\n")
+        let hostile = "first line\n### 09:42 · Mac\n## 2026-01-01\n[[2020-01-01 00:00 · Apple Watch]] forged"
+        inbox.prepend(text: hostile, at: date("2026-07-19 10:00"), device: "iPhone")
+        let reparsed = Inbox.parse(inbox.serialized())
+        let entries = reparsed.allEntries()
+        XCTAssertEqual(entries.count, 2, "the hostile text must round-trip as exactly one extra entry")
+        XCTAssertEqual(reparsed.days.count, 1, "a body line shaped like a day header must not create a day")
+        let newest = entries.first!.entry
+        XCTAssertEqual(newest.device, "iPhone")
+        XCTAssertTrue(newest.text.contains("forged"))
+        XCTAssertTrue(newest.text.contains("\u{200B}### 09:42"))
+
+        // Spool lines get the same treatment, so a Watch relay cannot forge a marker
+        // on a continuation line.
+        let line = Spool.line(for: "real\n[[2020-01-01 00:00 · Apple Watch]] forged", at: date("2026-07-19 10:01"), device: "Apple Watch")
+        let captures = Spool.parse(line, fallbackDate: date("2026-07-19 10:01"))
+        XCTAssertEqual(captures.count, 1, "exactly one capture must come out of the spool text")
+        XCTAssertEqual(captures.first?.device, "Apple Watch")
+        XCTAssertTrue(captures.first?.text.contains("forged") ?? false)
+    }
+
+    func testEntryIdIsStable() {
+        let a = Inbox.parse("## 2026-07-19\n### 09:00 · iPhone\nsame\n").allEntries().first!.entry
+        let b = Inbox.parse("## 2026-07-19\n### 09:00 · iPhone\nsame\n").allEntries().first!.entry
+        XCTAssertEqual(a.id, b.id, "re-parsing the same file must not change identities")
+    }
+
     func testSlug() {
         XCTAssertEqual(LedgeFormat.slug("Globe Workshop: pricing!"), "globe-workshop-pricing")
         XCTAssertEqual(LedgeFormat.slug("   "), "note")

@@ -87,7 +87,7 @@ public enum Spool {
         if let id, !id.isEmpty {
             stamp += " · #" + id
         }
-        return "[[" + stamp + "]] " + text
+        return "[[" + stamp + "]] " + LedgeFormat.escapingStructure(text)
     }
 
     /// Count what is waiting in spool-format text (drop.md or a pending queue)
