@@ -32,6 +32,12 @@ final class PanelController {
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
+    /// The last background maintenance error, if any. Shown in the header on
+    /// the next summon, because an LSUIElement app's NSLog is read by nobody.
+    var maintenanceFailure: String? {
+        didSet { content?.maintenanceFailure = maintenanceFailure }
+    }
+
     /// Live settings update from the Settings window. Width applies to the
     /// open panel immediately and to every future summon.
     func apply(_ newSettings: LedgeSettings) {
@@ -154,6 +160,7 @@ final class PanelController {
 
         self.panel = panel
         self.content = contentVC
+        contentVC.maintenanceFailure = maintenanceFailure
         return panel
     }
 

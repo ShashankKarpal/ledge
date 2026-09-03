@@ -144,6 +144,7 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
         do {
             try store.bootstrap()
             var inbox = try store.loadInbox()
+            let repairs = store.lastLoadRepairs
             let drained = (try? store.drainSpool(into: &inbox)) ?? 0
             if drained > 0 {
                 try store.saveInbox(inbox)
@@ -154,16 +155,41 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
             }
             setEditorText(inbox.serialized())
             placeCaretAtFirstEntry()
-            if let waiting = spoolWaitingLine() {
+            // Header priority: a failure, then a repair, then stuck captures,
+            // then a stale peer, then what was folded in. One line, most
+            // important thing first. Silent when everything is healthy.
+            if let failure = maintenanceFailure {
+                headerLabel.stringValue = "Inbox · background maintenance failed: " + failure
+                headerLabel.textColor = Theme.attention
+            } else if !repairs.isEmpty {
+                headerLabel.stringValue = "Inbox · " + repairs.joined(separator: "; ")
+            } else if let waiting = spoolWaitingLine() {
                 headerLabel.stringValue = "Inbox · " + waiting
+            } else if let peer = peerLine() {
+                headerLabel.stringValue = "Inbox · " + peer
             } else if drained > 0 {
                 headerLabel.stringValue = "Inbox · \(drained) folded in from your devices"
             }
             maybeShowMorningLedge()
         } catch {
-            headerLabel.stringValue = "Inbox · could not read the notes folder"
+            headerLabel.stringValue = "Inbox · could not read the notes folder: " + error.localizedDescription
             headerLabel.textColor = Theme.attention
         }
+    }
+
+    /// Set by the app delegate when a background maintenance pass fails.
+    var maintenanceFailure: String?
+
+    /// The sync-health line (M4): another device's heartbeat is older than the
+    /// threshold. Nil when healthy or when no other device has written one.
+    private func peerLine() -> String? {
+        LedgeStore.peerLine(from: store.readHeartbeats(), selfDevice: Self.deviceLabel)
+    }
+
+    /// Stamp this Mac's heartbeat after a successful write. Best effort here:
+    /// the write that just succeeded is the proof the folder is writable.
+    private func writeHeartbeat() {
+        try? store.writeHeartbeat(device: Self.deviceLabel, version: AppDelegate.appVersion, platform: "macOS")
     }
 
     // MARK: Morning Ledge
@@ -219,6 +245,7 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
             }
             lastSetEditorText = textView.string
             saveFailed = false
+            writeHeartbeat()
         } catch {
             saveFailed = true
             headerLabel.stringValue = "not saved yet, will retry"
@@ -257,6 +284,9 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
         let spoolRaw = ((try? store.readString(store.spoolURL)) ?? nil) ?? ""
         if raw == lastSeenDiskRaw && LedgeFormat.trimEdges(spoolRaw).isEmpty { return }
         lastSeenDiskRaw = raw
+        // New bytes arrived: stamp what this Mac now holds so the phone (and
+        // deploy.sh) can see the two devices agree on the inbox.
+        writeHeartbeat()
         do {
             var inbox = try store.loadInbox()
             let drained = (try? store.drainSpool(into: &inbox)) ?? 0
@@ -279,10 +309,15 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
             setEditorText(serialized)
             placeCaretAtFirstEntry()
             if waiting == nil {
-                headerLabel.stringValue = "Inbox · updated from your devices"
+                headerLabel.stringValue = store.lastLoadRepairs.isEmpty
+                    ? "Inbox · updated from your devices"
+                    : "Inbox · " + store.lastLoadRepairs.joined(separator: "; ")
             }
         } catch {
-            // Quiet by design; the next summon retries with full handling.
+            // Used to be silent by design. A read that fails while the panel is
+            // open is exactly the moment the owner is looking (brief, item 9).
+            headerLabel.stringValue = "Inbox · could not re-read the notes folder: " + error.localizedDescription
+            headerLabel.textColor = Theme.attention
         }
     }
 

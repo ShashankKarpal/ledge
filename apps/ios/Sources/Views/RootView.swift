@@ -37,14 +37,32 @@ struct RootView: View {
                         // A reinstall can kill the bookmark while the app still
                         // believes it is connected, so this must never be gated
                         // on connection state (learned 2026-08-19).
-                        ToolbarItem(placement: .navigationBarLeading) {
+                        ToolbarItemGroup(placement: .navigationBarLeading) {
                             Button {
                                 showingRepicker = true
                             } label: {
                                 Image(systemName: model.isConnected ? "folder" : "folder.badge.questionmark")
                             }
                             .accessibilityLabel("Change notes folder")
+                            // The explicit Refresh (brief item M2): reconnects if
+                            // needed, waits for a real download, reads, drains,
+                            // flushes, and always reports an outcome.
+                            Button {
+                                Task { await model.refreshNow() }
+                            } label: {
+                                if model.refreshing {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "arrow.clockwise")
+                                }
+                            }
+                            .disabled(model.refreshing)
+                            .accessibilityLabel("Refresh now")
                         }
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: .ledgeShowRepicker)) { _ in
+                        showingRepicker = true
                     }
                     .sheet(isPresented: $showingRepicker) {
                         FolderPicker { url in

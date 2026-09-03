@@ -14,21 +14,44 @@ struct InboxView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let notice = model.notice {
+            if let fault = model.fault {
+                // The blocking card (brief item M1/M3): one cause, one message,
+                // one button that is the fix for that cause and no other.
+                faultCard(fault)
+            } else if let notice = model.notice {
                 noticeBanner(notice)
             }
             captureBar
+            // Muted lines under the capture bar. Each is nil in the healthy
+            // case, so a healthy inbox shows nothing here (the no-badges rule).
+            if let outcome = model.refreshOutcome {
+                mutedLine(outcome)
+            }
             if let waiting = model.waitingLine {
-                // Capture trust: the one muted line allowed by the no-badges
-                // rule. Appears only while a capture is stuck outside the inbox.
-                Text(waiting)
-                    .font(.caption2)
-                    .foregroundColor(.ledgeTextMuted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 4)
+                // Capture trust: appears only while a capture is stuck outside the inbox.
+                mutedLine(waiting)
+            }
+            if let peer = model.peerLine {
+                // Sync health (M4): another device has not been heard from in hours.
+                mutedLine(peer)
             }
             List {
+                if !model.inbox.preamble.isEmpty {
+                    // Text the parser could not file under a day. It used to be
+                    // invisible here while the Mac showed it as normal content
+                    // (incident 2026-09-03). Nothing in the file may be hidden.
+                    Section {
+                        Text(model.inbox.preamble)
+                            .font(.body)
+                            .foregroundColor(.ledgeText)
+                            .listRowBackground(Color.ledgeSurface)
+                    } header: {
+                        Text("Unfiled text")
+                            .font(.footnote.weight(.medium))
+                            .foregroundColor(.ledgeTextMuted)
+                            .textCase(nil)
+                    }
+                }
                 ForEach(model.inbox.days, id: \.day) { day in
                     Section {
                         ForEach(day.entries) { entry in
@@ -62,9 +85,8 @@ struct InboxView: View {
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .refreshable {
-                await MainActor.run {
-                    model.becameActive()
-                }
+                // Same path as the toolbar button, so a pull also reports an outcome.
+                await model.refreshNow()
             }
         }
         .background(Color.ledgeBg.ignoresSafeArea())
@@ -127,6 +149,45 @@ struct InboxView: View {
                 justCaptured = false
             }
         }
+    }
+
+    // MARK: Sync fault card and muted lines
+
+    private func faultCard(_ fault: SyncFault) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(fault.message)
+                .font(.footnote)
+                .foregroundColor(.ledgeAttention)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button {
+                Task {
+                    if await model.performFaultAction() {
+                        NotificationCenter.default.post(name: .ledgeShowRepicker, object: nil)
+                    }
+                }
+            } label: {
+                if model.refreshing {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Text(fault.actionTitle)
+                        .font(.footnote.weight(.semibold))
+                }
+            }
+            .buttonStyle(.bordered)
+            .disabled(model.refreshing)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color.ledgeSurface)
+    }
+
+    private func mutedLine(_ text: String) -> some View {
+        Text(text)
+            .font(.caption2)
+            .foregroundColor(.ledgeTextMuted)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 4)
     }
 
     // MARK: Banner

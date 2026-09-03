@@ -12,7 +12,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panelController: PanelController!
     private var statusItemController: StatusItemController!
     private let hotkey = HotkeyManager()
-    private var syncWatcher: NSMetadataQuery?
+    private var folderWatch: DispatchSourceFileSystemObject?
+    private var folderWatchFD: Int32 = -1
     private var refreshWork: DispatchWorkItem?
     private var drainTimer: Timer?
     private var dragCapture: DragJiggleCaptureController?
@@ -48,9 +49,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Quiet maintenance on launch: fold phone captures in, let old days rest in the Attic.
         maintain()
+        writeHeartbeat()
 
-        startSyncWatcher()
+        startFolderWatch()
         startDrainTimer()
+    }
+
+    // MARK: Sync health (brief 2026-09-03, item M4)
+
+    static let appVersion: String =
+        (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "dev"
+
+    /// This Mac's "I was here" stamp in .ledge/. Written at launch, after every
+    /// maintenance pass, and by the panel on every successful commit. The
+    /// phone reads it to tell whether the Mac has been heard from.
+    func writeHeartbeat() {
+        do {
+            try store.writeHeartbeat(
+                device: PanelContentViewController.deviceLabel,
+                version: Self.appVersion,
+                platform: "macOS"
+            )
+        } catch {
+            NSLog("Ledge: heartbeat not written: \(error.localizedDescription)")
+        }
     }
 
     /// Capture trust: fold out-of-app captures in even when the panel is never
@@ -67,46 +89,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         drainTimer = timer
     }
 
-    /// Keep the Mac's local copies of the Ledge files fresh. Without a live
-    /// metadata query nothing tells macOS that anyone cares about this folder,
-    /// so changes written by the iPhone can sit undownloaded indefinitely.
-    /// The query watches the folder and force-downloads anything not current.
-    private func startSyncWatcher() {
-        let query = NSMetadataQuery()
-        query.searchScopes = [NSMetadataQueryUbiquitousDocumentsScope]
-        query.predicate = NSPredicate(format: "%K CONTAINS[c] '/Ledge/'", NSMetadataItemPathKey)
-        query.notificationBatchingInterval = 2
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(syncWatcherFired(_:)),
-            name: .NSMetadataQueryDidFinishGathering,
-            object: query
+    /// Watch the Ledge folder for writes landed by iCloud (the iPhone's
+    /// inbox.md, a spool append) and let the open panel pick them up.
+    ///
+    /// History: this used to be an NSMetadataQuery scoped to
+    /// NSMetadataQueryUbiquitousDocumentsScope. That scope covers the calling
+    /// app's own ubiquity container, and this app deliberately has none and is
+    /// signed with no entitlements at all, so the query gathered zero items
+    /// and the comment above it described behaviour that never happened
+    /// (brief 2026-09-03, failure mode L). A vnode source on the folder needs
+    /// no entitlement: iCloud replaces files in place, which is a directory
+    /// write event.
+    private func startFolderWatch() {
+        let path = store.root.path
+        folderWatchFD = open(path, O_EVTONLY)
+        guard folderWatchFD >= 0 else {
+            NSLog("Ledge: folder watch could not open \(path)")
+            return
+        }
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: folderWatchFD,
+            eventMask: [.write, .rename, .delete, .attrib],
+            queue: .main
         )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(syncWatcherFired(_:)),
-            name: .NSMetadataQueryDidUpdate,
-            object: query
-        )
-        query.start()
-        syncWatcher = query
+        source.setEventHandler { [weak self] in self?.folderChanged() }
+        source.setCancelHandler { [fd = folderWatchFD] in close(fd) }
+        source.resume()
+        folderWatch = source
     }
 
-    @objc private func syncWatcherFired(_ note: Notification) {
-        guard let query = syncWatcher else { return }
-        query.disableUpdates()
-        defer { query.enableUpdates() }
-        for case let item as NSMetadataItem in query.results {
-            guard let path = item.value(forAttribute: NSMetadataItemPathKey) as? String else { continue }
-            let status = item.value(forAttribute: NSMetadataUbiquitousItemDownloadingStatusKey) as? String
-            if status != NSMetadataUbiquitousItemDownloadingStatusCurrent {
-                try? FileManager.default.startDownloadingUbiquitousItem(at: URL(fileURLWithPath: path))
-            }
-        }
-        // Give the download a beat to land, then let the open panel pick it up.
+    private var folderEvents = 0
+
+    private func folderChanged() {
+        folderEvents += 1
+        // Ask for the newest bytes of the two files that matter; no-ops when
+        // they are already current.
+        try? FileManager.default.startDownloadingUbiquitousItem(at: store.inboxURL)
+        try? FileManager.default.startDownloadingUbiquitousItem(at: store.spoolURL)
+        // Coalesce the burst iCloud produces per change, then let the open
+        // panel pick it up. Logged so `log stream --process Ledge` can prove
+        // the watcher is alive, which its predecessor never could.
         refreshWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            self?.panelController.refreshFromCloudIfIdle()
+            guard let self else { return }
+            NSLog("Ledge: folder changed (event \(self.folderEvents)), refreshing panel if idle")
+            self.panelController.refreshFromCloudIfIdle()
         }
         refreshWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
@@ -149,12 +176,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func maintain() {
         do {
             var inbox = try store.loadInbox()
+            if !store.lastLoadRepairs.isEmpty {
+                NSLog("Ledge: repaired inbox.md: \(store.lastLoadRepairs.joined(separator: "; "))")
+            }
             var dirty = false
             if try store.drainSpool(into: &inbox) > 0 { dirty = true }
             if try store.age(&inbox, olderThanDays: settings.agingDays) > 0 { dirty = true }
             if dirty { try store.saveInbox(inbox) }
+            writeHeartbeat()
+            panelController.maintenanceFailure = nil
         } catch {
+            // Logged, and remembered: the next summon shows it in the header
+            // instead of a fresh "Inbox" that pretends nothing happened.
             NSLog("Ledge: maintenance skipped: \(error.localizedDescription)")
+            panelController.maintenanceFailure = error.localizedDescription
         }
     }
 

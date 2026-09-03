@@ -8,6 +8,9 @@
 // 3. The spool is truncated by exactly what was folded, never wholesale.
 
 import Foundation
+#if canImport(CryptoKit)
+import CryptoKit
+#endif
 
 public struct NoteMeta: Identifiable, Equatable {
     public var id: URL { url }
@@ -123,11 +126,24 @@ public final class LedgeStore {
 
     // MARK: Inbox
 
+    /// Structural repairs made by the most recent loadInbox, one line each.
+    /// Empty when the file was well formed. Surfaces read this to say what
+    /// was healed instead of healing silently (incident 2026-09-03).
+    public private(set) var lastLoadRepairs: [String] = []
+
     public func loadInbox() throws -> Inbox {
         let raw = try readString(inboxURL) ?? ""
         let clean = LedgeFormat.strippingNulls(raw)
-        var inbox = Inbox.parse(clean)
+        let report = Inbox.parseReporting(clean)
+        var inbox = report.inbox
         var dirty = false
+        lastLoadRepairs = report.repairs
+        if !report.repairs.isEmpty {
+            // Rewrite in canonical form so every other device parses the
+            // same structure we just displayed. Snapshot first, as always.
+            snapshot(inboxURL)
+            dirty = true
+        }
         if clean != raw {
             // Null-byte corruption (racing writes, 2026-08-17 incident): keep
             // the damaged bytes recoverable, scrub the nulls, and collapse the
@@ -412,6 +428,176 @@ public final class LedgeStore {
         guard fm.fileExists(atPath: atticURL.path) else { return [] }
         return try fm.contentsOfDirectory(at: atticURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
             .filter { $0.pathExtension.lowercased() == "md" }
+    }
+
+    // MARK: Sync health
+
+    /// Where an iCloud file's bytes stand on this device. `current` means the
+    /// local copy is the newest version iCloud knows about; `downloaded` means
+    /// a newer version exists and has not landed; `notDownloaded` means only a
+    /// placeholder is here. Nil when the file is not an iCloud item at all
+    /// (tests, a local folder), which callers treat as current.
+    public struct DownloadState: Equatable {
+        public enum Status: Equatable { case current, stale, notDownloaded }
+        public var status: Status
+        /// 0 to 100 while a download is in flight, else nil.
+        public var percent: Double?
+        public var isDownloading: Bool
+    }
+
+    public func downloadState(of url: URL) -> DownloadState? {
+        // Percent downloaded is only reachable through NSMetadataQuery, which
+        // needs an iCloud entitlement this app does not have; status and
+        // isDownloading are what the resource keys give us, and enough.
+        let keys: Set<URLResourceKey> = [
+            .ubiquitousItemDownloadingStatusKey,
+            .ubiquitousItemIsDownloadingKey,
+            .isUbiquitousItemKey
+        ]
+        guard let values = try? URL(fileURLWithPath: url.path).resourceValues(forKeys: keys) else { return nil }
+        if values.isUbiquitousItem == false { return nil }
+        guard let status = values.ubiquitousItemDownloadingStatus else { return nil }
+        let mapped: DownloadState.Status
+        switch status {
+        case .current: mapped = .current
+        case .downloaded: mapped = .stale
+        default: mapped = .notDownloaded
+        }
+        return DownloadState(
+            status: mapped,
+            percent: nil,
+            isDownloading: values.ubiquitousItemIsDownloading ?? false
+        )
+    }
+
+    /// Ask iCloud for the newest bytes of a file and wait, polling, until the
+    /// copy is current or the timeout passes. Returns the final state. Unlike
+    /// materialize this is meant for an explicit user action, so it may wait
+    /// for real (30 seconds by default) and never lies about the outcome.
+    public func downloadAndWait(_ url: URL, timeout: TimeInterval = 30, poll: TimeInterval = 0.25) -> DownloadState? {
+        try? fm.startDownloadingUbiquitousItem(at: url)
+        let deadline = Date().addingTimeInterval(timeout)
+        var state = downloadState(of: url)
+        while let s = state, s.status != .current, Date() < deadline {
+            Thread.sleep(forTimeInterval: poll)
+            state = downloadState(of: url)
+        }
+        return state
+    }
+
+    /// Prove the folder grant is real: write and remove a tiny file under
+    /// .ledge/. A security-scoped bookmark that resolves but grants nothing
+    /// (every iOS reinstall does this) fails here instead of later, silently.
+    public func probeWriteAccess() throws {
+        try fm.createDirectory(at: stateURL, withIntermediateDirectories: true)
+        let probe = stateURL.appendingPathComponent(".probe-" + UUID().uuidString)
+        try Data().write(to: probe, options: [])
+        try fm.removeItem(at: probe)
+    }
+
+    /// One device's "I was here" stamp. Lives in .ledge/ as its own file so it
+    /// can never conflict with inbox.md. Every surface reads all of them to
+    /// tell whether sync is alive, which is a different question from whether
+    /// a folder is connected (incident brief 2026-09-03, item M4).
+    public struct Heartbeat: Codable, Equatable {
+        public var device: String
+        public var at: Date
+        public var version: String
+        public var platform: String
+        /// SHA-256 prefix of the inbox.md bytes this device last had on disk.
+        /// Two devices with the same digest are looking at the same inbox,
+        /// which is the one thing "connected" never told anyone. Optional so
+        /// older heartbeats still decode.
+        public var inboxDigest: String?
+
+        public init(device: String, at: Date, version: String, platform: String, inboxDigest: String? = nil) {
+            self.device = device
+            self.at = at
+            self.version = version
+            self.platform = platform
+            self.inboxDigest = inboxDigest
+        }
+    }
+
+    /// First 16 hex characters of SHA-256 over the raw bytes of inbox.md as
+    /// they sit on this device. Nil when the file is absent or unreadable.
+    /// Plain Data read on purpose: this must describe the local copy, not
+    /// trigger a download.
+    public func inboxDigest() -> String? {
+        guard let data = try? Data(contentsOf: inboxURL) else { return nil }
+        return Self.digest(of: data)
+    }
+
+    public static func digest(of data: Data) -> String {
+        #if canImport(CryptoKit)
+        let hash = SHA256.hash(data: data)
+        return hash.prefix(8).map { String(format: "%02x", $0) }.joined()
+        #else
+        return String(data.hashValue, radix: 16)
+        #endif
+    }
+
+    public static func heartbeatSlug(for device: String) -> String {
+        LedgeFormat.slug(device, maxLength: 32)
+    }
+
+    public func heartbeatURL(for device: String) -> URL {
+        stateURL.appendingPathComponent("heartbeat-" + Self.heartbeatSlug(for: device) + ".json")
+    }
+
+    private static let heartbeatEncoder: JSONEncoder = {
+        let e = JSONEncoder()
+        e.dateEncodingStrategy = .iso8601
+        e.outputFormatting = [.sortedKeys]
+        return e
+    }()
+
+    private static let heartbeatDecoder: JSONDecoder = {
+        let d = JSONDecoder()
+        d.dateDecodingStrategy = .iso8601
+        return d
+    }()
+
+    /// Write this device's heartbeat. Throws on a real failure so callers can
+    /// tell the difference between "written" and "the folder is not writable".
+    public func writeHeartbeat(device: String, version: String, platform: String, now: Date = Date()) throws {
+        let beat = Heartbeat(device: device, at: now, version: version, platform: platform, inboxDigest: inboxDigest())
+        let data = try Self.heartbeatEncoder.encode(beat)
+        try fm.createDirectory(at: stateURL, withIntermediateDirectories: true)
+        try writeString(String(decoding: data, as: UTF8.self), to: heartbeatURL(for: device))
+    }
+
+    /// Every heartbeat in the folder, newest first. Placeholders are nudged
+    /// to download; an unreadable file is skipped, never fatal.
+    public func readHeartbeats() -> [Heartbeat] {
+        guard let items = try? fm.contentsOfDirectory(at: stateURL, includingPropertiesForKeys: nil, options: []) else { return [] }
+        var beats: [Heartbeat] = []
+        for url in items {
+            let name = url.lastPathComponent
+            let isBeat = name.hasPrefix("heartbeat-") && name.hasSuffix(".json")
+            let isPlaceholder = name.hasPrefix(".heartbeat-") && name.hasSuffix(".json.icloud")
+            if isPlaceholder {
+                let real = url.deletingLastPathComponent()
+                    .appendingPathComponent(String(name.dropFirst().dropLast(".icloud".count)))
+                try? fm.startDownloadingUbiquitousItem(at: real)
+                continue
+            }
+            guard isBeat, let raw = ((try? readString(url)) ?? nil),
+                  let beat = try? Self.heartbeatDecoder.decode(Heartbeat.self, from: Data(raw.utf8)) else { continue }
+            beats.append(beat)
+        }
+        return beats.sorted { $0.at > $1.at }
+    }
+
+    /// The muted "last seen" line: the newest heartbeat from any device other
+    /// than this one, but only when it is older than the threshold. Nil when
+    /// healthy or when no other device has ever written one, so the healthy
+    /// case shows nothing (the no-badges rule).
+    public static func peerLine(from beats: [Heartbeat], selfDevice: String, now: Date = Date(), threshold: TimeInterval = 6 * 3600) -> String? {
+        guard let newest = beats.first(where: { $0.device != selfDevice }) else { return nil }
+        let age = now.timeIntervalSince(newest.at)
+        guard age > threshold else { return nil }
+        return "last seen from " + newest.device + ": " + LedgeFormat.roughAge(age)
     }
 
     // MARK: iCloud materialization

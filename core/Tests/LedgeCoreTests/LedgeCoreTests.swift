@@ -525,4 +525,126 @@ final class LedgeCoreTests: XCTestCase {
         // And the waiting-line math sees nothing, not a phantom capture.
         XCTAssertEqual(Spool.status("\u{0000}\u{0000}", fallbackDate: date("2026-08-17 09:00")), .empty)
     }
+
+    // MARK: Damaged headers (incident 2026-09-03)
+
+    func testDamagedDayHeaderStillFilesItsEntries() {
+        // The live file on 2026-09-03: a backtick glued to the day header.
+        // Strict parsing demoted both Mac entries to preamble, which the phone
+        // never renders. The reader must recognise the day and report the fix.
+        let damaged = "## 2026-09-03`\n### 09:36 · MacBook M4\ndeploy check 0930\n\n### 09:35 · MacBook M4\ndeploy check 0930\n\n## 2026-09-01\n### 08:05 · iPhone\nhttps://example.com\n"
+        let report = Inbox.parseReporting(damaged)
+        XCTAssertEqual(report.repairs, ["repaired the day header for 2026-09-03"])
+        XCTAssertEqual(report.inbox.preamble, "", "nothing may be hidden as preamble")
+        XCTAssertEqual(report.inbox.days.map(\.day), ["2026-09-03", "2026-09-01"])
+        XCTAssertEqual(report.inbox.days[0].entries.count, 2)
+        XCTAssertEqual(report.inbox.days[0].freeText, "", "punctuation-only junk is dropped")
+        // Serializing writes the canonical header, and the healed file parses clean.
+        let healed = report.inbox.serialized()
+        XCTAssertTrue(healed.hasPrefix("## 2026-09-03\n"))
+        XCTAssertEqual(Inbox.parseReporting(healed).repairs, [])
+        XCTAssertEqual(Inbox.parse(healed), report.inbox)
+    }
+
+    func testDayHeaderJunkWithWordsIsKeptAsFreeText() {
+        let report = Inbox.parseReporting("## 2026-09-03 standup notes\n### 09:00\nx\n")
+        XCTAssertEqual(report.inbox.days[0].day, "2026-09-03")
+        XCTAssertEqual(report.inbox.days[0].freeText, "standup notes")
+        XCTAssertEqual(report.repairs.count, 1)
+    }
+
+    func testDayHeaderKeyRequiresARealDate() {
+        XCTAssertNil(LedgeFormat.dayHeaderKey("## Ideas"))
+        XCTAssertNil(LedgeFormat.dayHeaderKey("## 2026-13-45"))
+        XCTAssertNil(LedgeFormat.dayHeaderKey("### 2026-09-03"))
+        XCTAssertEqual(LedgeFormat.dayHeaderKey("## 2026-09-03")?.day, "2026-09-03")
+        XCTAssertEqual(LedgeFormat.dayHeaderKey("## 2026-09-03`")?.junk, "`")
+        // Captured text is defused by the same lenient rule the reader uses.
+        XCTAssertTrue(LedgeFormat.escapingStructure("## 2026-09-03`").hasPrefix("\u{200B}"))
+    }
+
+    func testDuplicateDaySectionsAreMerged() {
+        // A phone writing while the Mac's header was damaged creates a second
+        // section for the same day. Both must survive as one day, newest first.
+        let text = "## 2026-09-03\n### 12:30 · iPhone\nsync probe\n\n## 2026-09-03`\n### 09:36 · MacBook M4\ndeploy check\n\n## 2026-09-01\n### 08:05 · iPhone\nolder\n"
+        let report = Inbox.parseReporting(text)
+        XCTAssertEqual(report.inbox.days.map(\.day), ["2026-09-03", "2026-09-01"])
+        let today = report.inbox.days[0].entries
+        XCTAssertEqual(today.map(\.text), ["sync probe", "deploy check"])
+        XCTAssertTrue(report.repairs.contains("merged a second section for 2026-09-03"))
+        XCTAssertTrue(report.repairs.contains("repaired the day header for 2026-09-03"))
+    }
+
+    func testLoadInboxHealsDamagedHeaderOnDisk() throws {
+        let store = try makeTempStore()
+        try store.writeString("## 2026-09-03`\n### 09:36 · MacBook M4\ndeploy check 0930\n", to: store.inboxURL)
+        let inbox = try store.loadInbox()
+        XCTAssertEqual(store.lastLoadRepairs, ["repaired the day header for 2026-09-03"])
+        XCTAssertEqual(inbox.allEntries().count, 1)
+        let onDisk = try XCTUnwrap(try store.readString(store.inboxURL))
+        XCTAssertTrue(onDisk.hasPrefix("## 2026-09-03\n"), "the live file is rewritten in canonical form")
+        _ = try store.loadInbox()
+        XCTAssertEqual(store.lastLoadRepairs, [], "a healed file needs no further repair")
+    }
+
+    // MARK: Sync health (heartbeats)
+
+    func testHeartbeatRoundTripAndPeerLine() throws {
+        let store = try makeTempStore()
+        let now = date("2026-09-03 12:00")
+        try store.writeHeartbeat(device: "MacBook M4", version: "0.4.2", platform: "macOS", now: date("2026-09-03 03:00"))
+        try store.writeHeartbeat(device: "iPhone", version: "0.4.2", platform: "iOS", now: now)
+        let beats = store.readHeartbeats()
+        XCTAssertEqual(beats.map(\.device), ["iPhone", "MacBook M4"], "newest first")
+        XCTAssertEqual(store.heartbeatURL(for: "MacBook M4").lastPathComponent, "heartbeat-macbook-m4.json")
+        // The Mac was last seen 9 hours ago: over the 6 hour threshold, so the phone says so.
+        XCTAssertEqual(LedgeStore.peerLine(from: beats, selfDevice: "iPhone", now: now), "last seen from MacBook M4: 9 hours ago")
+        // From the Mac's point of view the phone was seen just now: silent.
+        XCTAssertNil(LedgeStore.peerLine(from: beats, selfDevice: "MacBook M4", now: now))
+        // A lone device has no peer to report on.
+        XCTAssertNil(LedgeStore.peerLine(from: beats.filter { $0.device == "iPhone" }, selfDevice: "iPhone", now: now))
+        // Rewriting the same device replaces, never accumulates.
+        try store.writeHeartbeat(device: "iPhone", version: "0.4.2", platform: "iOS", now: now.addingTimeInterval(60))
+        XCTAssertEqual(store.readHeartbeats().count, 2)
+    }
+
+    func testHeartbeatCarriesTheInboxDigest() throws {
+        let store = try makeTempStore()
+        try store.writeHeartbeat(device: "iPhone", version: "0.4.2", platform: "iOS")
+        let beat = try XCTUnwrap(store.readHeartbeats().first)
+        let expected = try XCTUnwrap(store.inboxDigest())
+        XCTAssertEqual(beat.inboxDigest, expected)
+        XCTAssertEqual(expected.count, 16, "16 hex characters, the same prefix deploy.sh takes from shasum -a 256")
+        // The digest is over the raw bytes on disk, so it moves when the file moves.
+        var inbox = try store.loadInbox()
+        inbox.prepend(text: "changed", at: date("2026-09-03 13:00"), device: "iPhone")
+        try store.saveInbox(inbox)
+        XCTAssertNotEqual(store.inboxDigest(), expected)
+        // And it decodes without the field, for heartbeats written by 0.4.2 builds before it existed.
+        let legacy = Data("{\"at\":\"2026-09-03T07:00:00Z\",\"device\":\"Mac\",\"platform\":\"macOS\",\"version\":\"0.4.2\"}".utf8)
+        try FileManager.default.createDirectory(at: store.stateURL, withIntermediateDirectories: true)
+        try legacy.write(to: store.heartbeatURL(for: "Mac"))
+        XCTAssertEqual(store.readHeartbeats().count, 2)
+    }
+
+    func testRoughAge() {
+        XCTAssertEqual(LedgeFormat.roughAge(5), "just now")
+        XCTAssertEqual(LedgeFormat.roughAge(90), "1 minute ago")
+        XCTAssertEqual(LedgeFormat.roughAge(4 * 3600 + 10), "4 hours ago")
+        XCTAssertEqual(LedgeFormat.roughAge(3 * 86400), "3 days ago")
+    }
+
+    func testProbeWriteAccessSucceedsOnWritableFolder() throws {
+        let store = try makeTempStore()
+        XCTAssertNoThrow(try store.probeWriteAccess())
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: store.stateURL.path).filter { $0.hasPrefix(".probe-") }
+        XCTAssertEqual(leftovers, [], "the probe cleans up after itself")
+    }
+
+    func testWellFormedFileReportsNoRepairs() {
+        var inbox = Inbox()
+        inbox.prepend(text: "a", at: date("2026-09-03 09:00"), device: "iPhone")
+        inbox.prepend(text: "b", at: date("2026-09-02 09:00"), device: "iPhone")
+        XCTAssertEqual(Inbox.parseReporting(inbox.serialized()).repairs, [])
+    }
 }

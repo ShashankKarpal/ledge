@@ -58,8 +58,26 @@ public struct Inbox: Equatable {
     // MARK: Parse
 
     public static func parse(_ text: String) -> Inbox {
+        parseReporting(text).inbox
+    }
+
+    /// One human-readable line per structural repair the parser had to make.
+    /// Empty for a well-formed file. Callers that persist the result should
+    /// save when this is non-empty, so the serializer writes the healed form.
+    public struct ParseReport: Equatable {
+        public var inbox: Inbox
+        public var repairs: [String]
+    }
+
+    /// Parse leniently and say what was repaired. The strict grammar is what
+    /// the serializer writes; the reader accepts the damage a raw text editor
+    /// can do to machine-written lines and reports it instead of hiding it
+    /// (incident 2026-09-03: a backtick on a day header made a morning's
+    /// entries invisible on the phone while the Mac showed them as normal).
+    public static func parseReporting(_ text: String) -> ParseReport {
         var preambleLines: [String] = []
         var days: [DaySection] = []
+        var repairs: [String] = []
 
         var dayKey: String?
         var freeLines: [String] = []
@@ -90,11 +108,28 @@ public struct Inbox: Equatable {
         func flushDay() {
             flushEntry()
             if let dk = dayKey {
-                days.append(DaySection(
+                let section = DaySection(
                     day: dk,
                     freeText: LedgeFormat.trimEdges(freeLines.joined(separator: "\n")),
                     entries: entries
-                ))
+                )
+                if let existing = days.firstIndex(where: { $0.day == dk }) {
+                    // Two sections for one day happen when a damaged header
+                    // hid the first one from a writer that then created a
+                    // second. Merge, newest first, dropping exact twins.
+                    var merged = Inbox(days: [days[existing]])
+                    for entry in section.entries.reversed() {
+                        _ = merged.fold([(date: entry.timestamp, text: entry.text, device: entry.device)])
+                    }
+                    if !section.freeText.isEmpty {
+                        let free = merged.days[0].freeText
+                        merged.days[0].freeText = free.isEmpty ? section.freeText : free + "\n" + section.freeText
+                    }
+                    days[existing] = merged.days[0]
+                    repairs.append("merged a second section for " + dk)
+                } else {
+                    days.append(section)
+                }
             }
             dayKey = nil
             freeLines = []
@@ -102,9 +137,18 @@ public struct Inbox: Equatable {
         }
 
         for line in text.components(separatedBy: "\n") {
-            if LedgeFormat.isDayHeader(line) {
+            if let header = LedgeFormat.dayHeaderKey(line) {
                 flushDay()
-                dayKey = String(line.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                dayKey = header.day
+                if !header.junk.isEmpty {
+                    repairs.append("repaired the day header for " + header.day)
+                    // Junk that carries words is kept as the day's free text
+                    // so nothing typed is lost; punctuation-only junk (a
+                    // stray backtick) is dropped.
+                    if header.junk.rangeOfCharacter(from: .alphanumerics) != nil {
+                        freeLines.append(header.junk)
+                    }
+                }
             } else if dayKey != nil, LedgeFormat.isEntryHeader(line) {
                 flushEntry()
                 entryTime = String(line.dropFirst(4)).trimmingCharacters(in: .whitespaces)
@@ -118,9 +162,19 @@ public struct Inbox: Equatable {
         }
         flushDay()
 
-        return Inbox(
-            preamble: LedgeFormat.trimEdges(preambleLines.joined(separator: "\n")),
-            days: days
+        // Days are written newest first. A merge above can leave them out of
+        // order; keys are yyyy-MM-dd so a string sort is chronological.
+        let sorted = days.sorted { $0.day > $1.day }
+        if sorted.map(\.day) != days.map(\.day) {
+            repairs.append("reordered days newest first")
+        }
+
+        return ParseReport(
+            inbox: Inbox(
+                preamble: LedgeFormat.trimEdges(preambleLines.joined(separator: "\n")),
+                days: sorted
+            ),
+            repairs: repairs
         )
     }
 

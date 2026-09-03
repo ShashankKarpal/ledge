@@ -6,6 +6,8 @@ import SwiftUI
 extension Notification.Name {
     /// Posted when a widget or the Control Center control asks for the capture keyboard.
     static let ledgeFocusCapture = Notification.Name("ledgeFocusCapture")
+    /// Posted by the sync fault card when the fix is to re-pick the folder.
+    static let ledgeShowRepicker = Notification.Name("ledgeShowRepicker")
 }
 
 @main
