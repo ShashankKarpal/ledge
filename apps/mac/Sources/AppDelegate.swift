@@ -158,6 +158,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             store.closeIncident(kind: .disagreement, observer: me, peer: peerName)
         }
 
+        // A safety net nobody can see is not a safety net. If the write-ahead
+        // log holds a capture that was never confirmed and is not in the
+        // inbox, say so on the one always-visible surface.
+        if let inbox = try? store.loadInbox() {
+            let missing = Self.captureLog.unrecovered(comparedTo: inbox)
+            statusItemController?.setCaptureAlert(
+                missing.isEmpty ? nil
+                    : (missing.count == 1
+                        ? "1 capture is not accounted for"
+                        : "\(missing.count) captures are not accounted for")
+            )
+        }
+
         currentSyncHealth = health.line
         statusItemController?.setSyncHealth(health.line)
         if let line = health.line, line != lastSyncHealth {
@@ -269,15 +282,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Shared quiet capture path for the mini-popover (A1) and the edge drop
     /// strip (A3). Full store guards apply; failure returns false, loses nothing.
+    /// This Mac's device-local write-ahead log, outside the iCloud folder.
+    static let captureLog = CaptureLog(url: CaptureLog.defaultURL())
+
     private func quickCapture(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
+        // Write-ahead before anything that can fail.
+        let logged = try? Self.captureLog.record(
+            text: trimmed,
+            device: PanelContentViewController.deviceLabel,
+            intent: "inbox"
+        )
         do {
             var inbox = try store.loadInbox()
             let batch = try store.drainSpool(into: &inbox)
             inbox.prepend(text: trimmed, at: Date(), device: PanelContentViewController.deviceLabel)
             try store.saveInbox(inbox)
             try batch.commit()
+            if let logged { Self.captureLog.confirm(logged.id) }
             writeHeartbeat(force: true)
             return true
         } catch {

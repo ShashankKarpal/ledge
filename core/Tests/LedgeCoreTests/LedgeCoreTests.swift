@@ -536,6 +536,91 @@ final class LedgeCoreTests: XCTestCase {
         XCTAssertEqual(Spool.status("\u{0000}\u{0000}", fallbackDate: date("2026-08-17 09:00")), .empty)
     }
 
+    // MARK: Capture log (the write-ahead last line of defence)
+
+    func makeCaptureLog() -> CaptureLog {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LedgeLog-" + UUID().uuidString + ".jsonl")
+        return CaptureLog(url: url)
+    }
+
+    func testCaptureLogSurvivesACrashBetweenRecordAndStore() throws {
+        // The scenario the log exists for: the thought is recorded, then
+        // everything downstream fails or the process dies. The text must still
+        // be on this device's disk, and recovery must be able to name it.
+        let log = makeCaptureLog()
+        let stamp = date("2026-09-04 09:00")
+        let entry = try log.record(text: "the thought", device: "iPhone", intent: "spool", at: stamp)
+        // Nothing confirms it. An empty inbox is what a lost capture looks like.
+        let missing = log.unrecovered(comparedTo: Inbox(), now: stamp.addingTimeInterval(600))
+        XCTAssertEqual(missing.map(\.text), ["the thought"])
+        XCTAssertEqual(missing.first?.id, entry.id)
+    }
+
+    func testCaptureLogIsQuietWhenTheCaptureLanded() throws {
+        let log = makeCaptureLog()
+        let stamp = date("2026-09-04 09:00")
+        try log.record(text: "landed", device: "iPhone", intent: "inbox", at: stamp)
+        var inbox = Inbox()
+        inbox.prepend(text: "landed", at: stamp, device: "iPhone")
+        // Present in the inbox, so nothing to recover even without a confirm.
+        XCTAssertEqual(log.unrecovered(comparedTo: inbox, now: stamp.addingTimeInterval(600)).count, 0)
+
+        // And an explicit confirmation also silences it.
+        let other = try log.record(text: "confirmed only", device: "iPhone", intent: "spool", at: stamp)
+        log.confirm(other.id)
+        XCTAssertEqual(log.unrecovered(comparedTo: inbox, now: stamp.addingTimeInterval(600)).count, 0)
+    }
+
+    func testCaptureLogGivesRecentCapturesTimeToLand() throws {
+        let log = makeCaptureLog()
+        let stamp = date("2026-09-04 09:00")
+        try log.record(text: "just now", device: "iPhone", intent: "spool", at: stamp)
+        // Seconds old: still in flight, must not be reported as lost.
+        XCTAssertEqual(log.unrecovered(comparedTo: Inbox(), now: stamp.addingTimeInterval(30)).count, 0)
+        XCTAssertEqual(log.unrecovered(comparedTo: Inbox(), now: stamp.addingTimeInterval(600)).count, 1)
+    }
+
+    func testCaptureLogIsAppendOnlyAndNeverRewritten() throws {
+        let log = makeCaptureLog()
+        let stamp = date("2026-09-04 09:00")
+        let a = try log.record(text: "one", device: "iPhone", intent: "spool", at: stamp)
+        try log.record(text: "two", device: "iPhone", intent: "spool", at: stamp.addingTimeInterval(60))
+        log.confirm(a.id)
+        // Confirming appends a line; it never edits the original entry, because
+        // rewriting is the operation that has caused every loss bug here.
+        let raw = try XCTUnwrap(try? String(contentsOf: log.url, encoding: .utf8))
+        XCTAssertEqual(raw.components(separatedBy: "\n").filter { !$0.isEmpty }.count, 3)
+        XCTAssertTrue(raw.contains("\"text\":\"one\""))
+        XCTAssertEqual(log.entries().filter { $0.intent != "confirm" }.count, 2)
+    }
+
+    func testCaptureLogConcurrentWritesAllSurvive() throws {
+        let log = makeCaptureLog()
+        let group = DispatchGroup()
+        for i in 0..<30 {
+            DispatchQueue.global().async(group: group) {
+                _ = try? log.record(text: "thought \(i)", device: "iPhone", intent: "spool")
+            }
+        }
+        XCTAssertEqual(group.wait(timeout: .now() + 30), .success)
+        let texts = Set(log.entries().map(\.text))
+        for i in 0..<30 {
+            XCTAssertTrue(texts.contains("thought \(i)"), "thought \(i) missing from the last line of defence")
+        }
+    }
+
+    func testCaptureLogExportsReadableMarkdown() throws {
+        let log = makeCaptureLog()
+        try log.record(text: "second", device: "iPhone", intent: "spool", at: date("2026-09-04 10:00"))
+        try log.record(text: "first", device: "MacBook M4", intent: "inbox", at: date("2026-09-04 09:00"))
+        let md = log.exportMarkdown()
+        // Oldest first, and the escape hatch works with no app involved.
+        XCTAssertTrue(md.contains("### 2026-09-04 09:00 · MacBook M4\nfirst"))
+        XCTAssertTrue(md.range(of: "first")!.lowerBound < md.range(of: "second")!.lowerBound)
+        XCTAssertFalse(md.contains("confirm"))
+    }
+
     // MARK: Incident log (so the relay decision rests on counts, not memory)
 
     func testIncidentIsExtendedNotDuplicatedWhileItContinues() {

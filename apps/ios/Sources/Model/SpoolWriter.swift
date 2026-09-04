@@ -56,11 +56,29 @@ enum SpoolWriter {
 
     /// Append one capture to capture/drop.md, falling back to the pending queue.
     /// `id` is the watch relay's delivery id; drain dedupes repeat deliveries by it.
+    /// The device-local write-ahead log. Every capture is recorded here first,
+    /// so nothing that happens afterwards can lose the thought entirely.
+    static let log = CaptureLog(url: CaptureLog.defaultURL())
+
     @discardableResult
     static func append(text: String, at date: Date, device: String? = nil, id: String? = nil) -> Landing {
         let trimmed = LedgeFormat.trimEdges(text)
         guard !trimmed.isEmpty else { return .spool }
-        let line = Spool.line(for: trimmed, at: date, device: device, id: id)
+
+        // WRITE AHEAD, before anything that can fail. If the folder is gone,
+        // the grant is dead, iCloud is wedged, or this process dies mid-write,
+        // the thought is already on this device's disk in a file nothing else
+        // touches.
+        let deliveryID = id ?? UUID().uuidString
+        let logged = try? log.record(
+            text: trimmed,
+            device: device ?? "iPhone",
+            intent: "spool",
+            id: deliveryID,
+            at: date
+        )
+
+        let line = Spool.line(for: trimmed, at: date, device: device, id: deliveryID)
 
         guard let resolved = resolveRoot() else {
             return appendToPending(line)
@@ -72,6 +90,7 @@ enum SpoolWriter {
         let store = LedgeStore(root: resolved.url)
         do {
             try store.appendSpoolLine(line)
+            if logged != nil { log.confirm(deliveryID) }
             return .spool
         } catch {
             return appendToPending(line)

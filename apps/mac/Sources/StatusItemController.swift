@@ -14,6 +14,7 @@ final class StatusItemController: NSObject {
     private var popover: NSPopover?
     private let menu = NSMenu()
     private let syncHealthItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private let captureAlertItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
 
     /// Show or hide the sync-health row. Pass nil when healthy.
     func setSyncHealth(_ line: String?) {
@@ -22,6 +23,18 @@ final class StatusItemController: NSObject {
             syncHealthItem.isHidden = false
         } else {
             syncHealthItem.isHidden = true
+        }
+    }
+
+    /// Show or hide the unaccounted-captures row. Pass nil when everything the
+    /// write-ahead log recorded has been found. This is the only place the
+    /// safety net becomes visible, so it must not be silent when it matters.
+    func setCaptureAlert(_ line: String?) {
+        if let line {
+            captureAlertItem.title = line
+            captureAlertItem.isHidden = false
+        } else {
+            captureAlertItem.isHidden = true
         }
     }
 
@@ -69,6 +82,10 @@ final class StatusItemController: NSObject {
         syncHealthItem.isEnabled = false
         syncHealthItem.isHidden = true
         menu.addItem(syncHealthItem)
+
+        captureAlertItem.isEnabled = false
+        captureAlertItem.isHidden = true
+        menu.addItem(captureAlertItem)
 
         let hint = NSMenuItem(title: "Summon: Option+Space · Esc tucks away", action: nil, keyEquivalent: "")
         hint.isEnabled = false

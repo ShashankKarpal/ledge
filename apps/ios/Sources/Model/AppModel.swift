@@ -529,11 +529,18 @@ final class AppModel: ObservableObject {
             queueWhenDisconnected(text: trimmed, at: now)
             return
         }
+        // Write-ahead: on this device's own disk, outside iCloud, before the
+        // save that can fail. Recovery reads this when a capture goes missing.
+        let logged = try? SpoolWriter.log.record(
+            text: trimmed, device: Self.deviceName, intent: "inbox", at: now
+        )
+
         var updated = inbox
         updated.prepend(text: trimmed, at: now, device: Self.deviceName)
         do {
             try store.saveInbox(updated)
             inbox = updated
+            if let logged { SpoolWriter.log.confirm(logged.id) }
             journalAdd(text: trimmed, at: now)
             writeHeartbeat(force: true)
         } catch {

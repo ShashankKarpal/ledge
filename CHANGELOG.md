@@ -18,6 +18,35 @@ All notable changes to Ledge. History before v0.4.0 was not tracked in this file
 
 ## Unreleased
 
+### v0.5.1: the capture log
+
+The last line of defence, and the thing both independent reviews ranked as the
+largest reduction in the chance of losing a thought per unit of new code,
+ahead of both a storage rewrite and a second sync transport.
+
+- `capture-log.jsonl`, one per device, outside the iCloud folder: iOS in the
+  app's own Documents, macOS in Application Support. Every capture is recorded
+  there BEFORE anything that can fail, and the line is never deleted.
+- Confirmation appends a second line rather than editing the first. Rewriting
+  a file in place is the operation behind every data-loss bug in this project,
+  so the safety net is forbidden from doing it.
+- `unrecovered(comparedTo:)` names captures that were never confirmed and are
+  not in the inbox now, with a five minute grace so in-flight captures are not
+  reported. The Mac menu shows "N captures are not accounted for" when that
+  list is non-empty, and nothing at all when it is empty.
+- `exportMarkdown()` reconstructs everything this device ever captured, with
+  no app and no AI involved. That is the point: the file is readable and the
+  recovery path does not depend on Ledge working.
+- Wired into every capture surface that can lose something: iOS in-app
+  capture, SpoolWriter (which covers the Siri intent, the widgets and the
+  Watch relay), and the Mac quick capture. The Mac panel is covered by its own
+  recovery journal from 0.5.0.
+- Privacy note, deliberately opposite to `incidents.log`: this file DOES hold
+  your capture text, because a log without it could not restore anything. It
+  never leaves the device and is not in the synced folder.
+- Six tests, including a thirty-way concurrent write and the crash-between-
+  record-and-store case the log exists for. 74 tests total.
+
 ### v0.5.0: capture durability
 
 Everything in this release is reliability work, which the seven-day gate
