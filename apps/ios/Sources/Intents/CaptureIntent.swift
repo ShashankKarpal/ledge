@@ -23,15 +23,25 @@ struct CaptureIntent: AppIntent {
     var text: String
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        // Say what actually happened. This used to answer "Captured." no
+        // matter what, including when the capture reached nothing at all, so
+        // Siri confirmed a thought into the void (review 2026-09-03).
         #if os(watchOS)
         let trimmed = LedgeFormat.trimEdges(text)
         if !trimmed.isEmpty {
             WatchSessionManager.shared.send(trimmed)
         }
-        #else
-        SpoolWriter.append(text: text, at: Date(), device: "iPhone")
-        #endif
         return .result(dialog: "Captured.")
+        #else
+        switch SpoolWriter.append(text: text, at: Date(), device: "iPhone") {
+        case .spool:
+            return .result(dialog: "Captured.")
+        case .pending:
+            return .result(dialog: "Captured to this iPhone. Ledge will file it when your folder is reachable.")
+        case .failed:
+            return .result(dialog: "Ledge could not save that. Nothing was written, so please write it down elsewhere.")
+        }
+        #endif
     }
 }
 

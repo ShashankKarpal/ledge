@@ -12,8 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panelController: PanelController!
     private var statusItemController: StatusItemController!
     private let hotkey = HotkeyManager()
-    private var folderWatch: DispatchSourceFileSystemObject?
-    private var folderWatchFD: Int32 = -1
+    private var folderWatches: [DispatchSourceFileSystemObject] = []
     private var refreshWork: DispatchWorkItem?
     private var drainTimer: Timer?
     private var dragCapture: DragJiggleCaptureController?
@@ -30,6 +29,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settings = LedgeSettings.load(from: store.settingsURL)
 
         panelController = PanelController(store: store, settings: settings)
+        panelController.heartbeatWriter = { [weak self] force in self?.writeHeartbeat(force: force) }
+        panelController.syncHealthProvider = { [weak self] in
+            self?.updateSyncHealth()
+            return self?.currentSyncHealth
+        }
         statusItemController = StatusItemController(
             togglePanel: { [weak self] in self?.panelController.toggle() },
             openFolder: { [weak self] in
@@ -49,7 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Quiet maintenance on launch: fold phone captures in, let old days rest in the Attic.
         maintain()
-        writeHeartbeat()
+        writeHeartbeat(force: true)
 
         startFolderWatch()
         startDrainTimer()
@@ -60,28 +64,128 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static let appVersion: String =
         (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "dev"
 
-    /// This Mac's "I was here" stamp in .ledge/. Written at launch, after every
-    /// maintenance pass, and by the panel on every successful commit. The
-    /// phone reads it to tell whether the Mac has been heard from.
-    func writeHeartbeat() {
+    private var lastHeartbeatWrite: Date = .distantPast
+    private var lastHeartbeatDigest: String?
+
+    /// This Mac's "I was here" stamp in .ledge/. Written at launch, whenever
+    /// the inbox bytes change, and otherwise at most hourly.
+    ///
+    /// The first version rewrote it every 5 minutes forever. This app is
+    /// resident all day, so that turned an idle folder into a permanent iCloud
+    /// writer and roughly doubled the folder's upload traffic (bird: about 14
+    /// uploads an hour before 0.4.2, 24 after, 38 once the phone joined in).
+    /// Health monitoring must not itself be a load on the transport it
+    /// watches. `force` is for launch and for a capture that just landed.
+    func writeHeartbeat(force: Bool = false) {
+        let now = Date()
+        let digest = store.inboxDigest()
+        // ADAPTIVE CADENCE. Hourly while nobody is watching, but every 10
+        // minutes while a peer is actually active, because the disagreement
+        // check only trusts a peer seen within 15 minutes. With a flat hourly
+        // stamp this Mac was outside that window for 45 minutes of every hour,
+        // so the warning built for the 2026-09-03 stall could not fire and
+        // "Up to date with MacBook M4" was unreachable on the phone. The two
+        // halves disagreed about their own contract (review 2026-09-03).
+        //
+        // Cost when the phone is idle: 1 write an hour. When it is in use:
+        // 6 an hour, against 12 in the version that caused the churn
+        // regression, and only while someone is there to read the answer.
+        let peerActive = store.readHeartbeats().contains { beat in
+            beat.device != PanelContentViewController.deviceLabel
+                && now.timeIntervalSince(beat.at) <= 30 * 60
+        }
+        let interval: TimeInterval = peerActive ? 600 : 3600
+        let due = now.timeIntervalSince(lastHeartbeatWrite) >= interval
+        guard force || due || digest != lastHeartbeatDigest else { return }
         do {
             try store.writeHeartbeat(
                 device: PanelContentViewController.deviceLabel,
                 version: Self.appVersion,
-                platform: "macOS"
+                platform: "macOS",
+                now: now
             )
+            lastHeartbeatWrite = now
+            lastHeartbeatDigest = digest
         } catch {
             NSLog("Ledge: heartbeat not written: \(error.localizedDescription)")
         }
     }
 
+    /// The sync-health line for the menu bar: is the other device stranded on
+    /// different bytes, or has it gone quiet? Nil when healthy.
+    private static let disagreementSinceKey = "ledge.disagreementSince"
+    private static let disagreementIdentityKey = "ledge.disagreementKey"
+    private var lastHealthCheck: Date = .distantPast
+
+    /// Throttled: the open panel asks on its 2-second timer, and each call
+    /// reads the heartbeat directory and hashes inbox.md. Once every 20
+    /// seconds is far below the 5-minute grace and costs nothing.
+    func updateSyncHealth(force: Bool = false) {
+        let now = Date()
+        guard force || now.timeIntervalSince(lastHealthCheck) >= 20 else { return }
+        lastHealthCheck = now
+        let defaults = UserDefaults.standard
+        let health = LedgeStore.evaluatePeer(
+            beats: store.readHeartbeats(),
+            selfDevice: PanelContentViewController.deviceLabel,
+            selfDigest: store.inboxDigest(),
+            disagreementSince: defaults.object(forKey: Self.disagreementSinceKey) as? Date,
+            disagreementKey: defaults.string(forKey: Self.disagreementIdentityKey),
+            now: now
+        )
+        if let since = health.disagreementSince, let key = health.disagreementKey {
+            defaults.set(since, forKey: Self.disagreementSinceKey)
+            defaults.set(key, forKey: Self.disagreementIdentityKey)
+        } else {
+            defaults.removeObject(forKey: Self.disagreementSinceKey)
+            defaults.removeObject(forKey: Self.disagreementIdentityKey)
+        }
+        // Count every stall, so the question "how often does this happen"
+        // has a countable answer instead of a remembered one.
+        let me = PanelContentViewController.deviceLabel
+        let peerName = store.readHeartbeats().first { $0.device != me }?.device
+        if health.line != nil, let since = health.disagreementSince {
+            store.noteIncident(SyncIncident(
+                kind: .disagreement,
+                observer: me,
+                startedAt: since,
+                endedAt: nil,
+                peer: peerName,
+                version: Self.appVersion,
+                secondsAfterInstall: store.secondsSinceLastInstall(now: since)
+            ))
+        } else if health.disagreementSince == nil {
+            store.closeIncident(kind: .disagreement, observer: me, peer: peerName)
+        }
+
+        currentSyncHealth = health.line
+        statusItemController?.setSyncHealth(health.line)
+        if let line = health.line, line != lastSyncHealth {
+            NSLog("Ledge: sync health: \(line)")
+        }
+        lastSyncHealth = health.line
+    }
+
+    private var lastSyncHealth: String?
+
+    /// The most recent evaluation, for surfaces that ask rather than observe.
+    private(set) var currentSyncHealth: String?
+
     /// Capture trust: fold out-of-app captures in even when the panel is never
     /// summoned (a capture once sat in the spool for eleven days while the app
     /// ran). Slow on purpose; the open panel's own 2-second heartbeat covers
     /// the visible case, so this only runs while the panel is tucked away.
+    /// Sync health is checked on every tick regardless, because the panel
+    /// being tucked away is exactly when a stall goes unnoticed.
     private func startDrainTimer() {
         let timer = Timer(timeInterval: 300, repeats: true) { [weak self] _ in
-            guard let self, !self.panelController.isVisible else { return }
+            guard let self else { return }
+            // Both of these run whether or not the panel is open: the panel
+            // being tucked away is exactly when a stall goes unnoticed, and
+            // the peer needs a live stamp from us to disagree with.
+            self.writeHeartbeat()
+            self.updateSyncHealth(force: true)
+            guard !self.panelController.isVisible else { return }
             self.maintain()
         }
         timer.tolerance = 30
@@ -100,22 +204,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// (brief 2026-09-03, failure mode L). A vnode source on the folder needs
     /// no entitlement: iCloud replaces files in place, which is a directory
     /// write event.
+    /// A vnode source watches ONE directory, not a tree. inbox.md lives in the
+    /// root, but the spool lives in capture/, so an out-of-app capture landing
+    /// in capture/drop.md fires nothing on the root watch. Both are watched
+    /// explicitly (independent review, 2026-09-03).
     private func startFolderWatch() {
-        let path = store.root.path
-        folderWatchFD = open(path, O_EVTONLY)
-        guard folderWatchFD >= 0 else {
-            NSLog("Ledge: folder watch could not open \(path)")
-            return
+        for url in [store.root, store.captureURL] {
+            try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            let fd = open(url.path, O_EVTONLY)
+            guard fd >= 0 else {
+                NSLog("Ledge: folder watch could not open \(url.lastPathComponent)")
+                continue
+            }
+            let source = DispatchSource.makeFileSystemObjectSource(
+                fileDescriptor: fd,
+                eventMask: [.write, .rename, .delete, .attrib],
+                queue: .main
+            )
+            source.setEventHandler { [weak self] in self?.folderChanged() }
+            source.setCancelHandler { close(fd) }
+            source.resume()
+            folderWatches.append(source)
         }
-        let source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: folderWatchFD,
-            eventMask: [.write, .rename, .delete, .attrib],
-            queue: .main
-        )
-        source.setEventHandler { [weak self] in self?.folderChanged() }
-        source.setCancelHandler { [fd = folderWatchFD] in close(fd) }
-        source.resume()
-        folderWatch = source
     }
 
     private var folderEvents = 0
@@ -164,9 +274,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !trimmed.isEmpty else { return false }
         do {
             var inbox = try store.loadInbox()
-            _ = try? store.drainSpool(into: &inbox)
+            let batch = try store.drainSpool(into: &inbox)
             inbox.prepend(text: trimmed, at: Date(), device: PanelContentViewController.deviceLabel)
             try store.saveInbox(inbox)
+            try batch.commit()
+            writeHeartbeat(force: true)
             return true
         } catch {
             return false
@@ -180,11 +292,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NSLog("Ledge: repaired inbox.md: \(store.lastLoadRepairs.joined(separator: "; "))")
             }
             var dirty = false
-            if try store.drainSpool(into: &inbox) > 0 { dirty = true }
+            let batch = try store.drainSpool(into: &inbox)
+            if batch.added > 0 { dirty = true }
             if try store.age(&inbox, olderThanDays: settings.agingDays) > 0 { dirty = true }
             if dirty { try store.saveInbox(inbox) }
+            try batch.commit()
             writeHeartbeat()
             panelController.maintenanceFailure = nil
+            updateSyncHealth()
         } catch {
             // Logged, and remembered: the next summon shows it in the header
             // instead of a fresh "Inbox" that pretends nothing happened.

@@ -140,6 +140,10 @@ struct InboxView: View {
         let text = trimmedDraft
         guard !text.isEmpty else { return }
         model.capture(text: text)
+        // Keep the text in the field when nothing durable was written. The
+        // checkmark plus a cleared field told the user their thought was safe
+        // even when it had reached nowhere (review 2026-09-03).
+        guard model.lastCaptureLanded else { return }
         draft = ""
         withAnimation(.easeOut(duration: 0.15)) {
             justCaptured = true

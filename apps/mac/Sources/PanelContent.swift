@@ -145,16 +145,47 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
             try store.bootstrap()
             var inbox = try store.loadInbox()
             let repairs = store.lastLoadRepairs
-            let drained = (try? store.drainSpool(into: &inbox)) ?? 0
+            // The spool is consumed only after the save succeeds. The old
+            // shape drained (which emptied drop.md) and then saved with
+            // `try?`, so a failed save silently destroyed the captures.
+            let batch = try store.drainSpool(into: &inbox)
+            let drained = batch.added
             if drained > 0 {
                 try store.saveInbox(inbox)
             }
+            try batch.commit()
+            // Words from a save that never landed, possibly from before a
+            // restart. Fold them back in as an entry rather than pasting the
+            // whole old document over the current one, and only once: the
+            // journal is cleared by the successful save below.
+            var recovered = 0
+            if let text = Self.pendingRecoveryText() {
+                let lost = Inbox.parse(text)
+                for item in lost.allEntries().reversed() where !item.entry.text.isEmpty {
+                    recovered += inbox.fold([(date: item.entry.timestamp,
+                                              text: item.entry.text,
+                                              device: item.entry.device)])
+                }
+                if recovered > 0 {
+                    try store.saveInbox(inbox)
+                }
+                clearRecoveryJournal()
+            }
+
             let newestIsEmpty = inbox.days.first?.entries.first?.text.isEmpty ?? false
             if !newestIsEmpty {
                 inbox.prepend(text: "", at: Date(), device: Self.deviceLabel)
             }
             setEditorText(inbox.serialized())
             placeCaretAtFirstEntry()
+            if recovered > 0 {
+                headerLabel.stringValue = recovered == 1
+                    ? "Inbox · recovered 1 entry that had not saved"
+                    : "Inbox · recovered \(recovered) entries that had not saved"
+                headerLabel.textColor = Theme.textMuted
+                maybeShowMorningLedge()
+                return
+            }
             // Header priority: a failure, then a repair, then stuck captures,
             // then a stale peer, then what was folded in. One line, most
             // important thing first. Silent when everything is healthy.
@@ -180,16 +211,21 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
     /// Set by the app delegate when a background maintenance pass fails.
     var maintenanceFailure: String?
 
-    /// The sync-health line (M4): another device's heartbeat is older than the
-    /// threshold. Nil when healthy or when no other device has written one.
+    /// Called by the panel to reach the delegate's throttled heartbeat writer
+    /// and its persisted disagreement clock. Set at construction.
+    var syncHealthProvider: (() -> String?)?
+    var heartbeatWriter: ((Bool) -> Void)?
+
+    /// The sync-health line (M4): the peer is alive but holding different
+    /// bytes, or has gone quiet. Nil when healthy.
     private func peerLine() -> String? {
-        LedgeStore.peerLine(from: store.readHeartbeats(), selfDevice: Self.deviceLabel)
+        syncHealthProvider?()
     }
 
-    /// Stamp this Mac's heartbeat after a successful write. Best effort here:
-    /// the write that just succeeded is the proof the folder is writable.
+    /// Stamp this Mac's heartbeat after a successful write. Throttled by the
+    /// delegate: only a real content change or the hourly keepalive writes.
     private func writeHeartbeat() {
-        try? store.writeHeartbeat(device: Self.deviceLabel, version: AppDelegate.appVersion, platform: "macOS")
+        heartbeatWriter?(true)
     }
 
     // MARK: Morning Ledge
@@ -245,12 +281,48 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
             }
             lastSetEditorText = textView.string
             saveFailed = false
+            clearRecoveryJournal()
             writeHeartbeat()
         } catch {
             saveFailed = true
-            headerLabel.stringValue = "not saved yet, will retry"
+            // Keep the text somewhere that is NOT iCloud before admitting the
+            // failure. Until now a failed save left the words only in an
+            // NSTextView: quitting, a crash, or a resummon that reloaded from
+            // disk took them with it. The journal is local, outside the synced
+            // folder, and is cleared the moment a save succeeds
+            // (Codex review, v0.5 item: protect the Mac editor).
+            writeRecoveryJournal(textView.string)
+            headerLabel.stringValue = "not saved yet, kept a local copy, will retry"
             headerLabel.textColor = Theme.attention
         }
+    }
+
+    // MARK: Editor recovery journal
+
+    /// Local, outside the iCloud folder on purpose: this is the copy that must
+    /// survive the folder being unreachable.
+    static var recoveryJournalURL: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Ledge", isDirectory: true)
+        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        return base.appendingPathComponent("editor-recovery.md")
+    }
+
+    private func writeRecoveryJournal(_ text: String) {
+        guard !LedgeFormat.trimEdges(text).isEmpty else { return }
+        try? text.write(to: Self.recoveryJournalURL, atomically: true, encoding: .utf8)
+    }
+
+    private func clearRecoveryJournal() {
+        try? FileManager.default.removeItem(at: Self.recoveryJournalURL)
+    }
+
+    /// Text from a previous session whose save never landed. Nil when the last
+    /// save succeeded, which is the normal case.
+    static func pendingRecoveryText() -> String? {
+        guard let raw = try? String(contentsOf: recoveryJournalURL, encoding: .utf8),
+              !LedgeFormat.trimEdges(raw).isEmpty else { return nil }
+        return raw
     }
 
     /// True while the most recent commit failed; dismiss() shows the failure
@@ -282,17 +354,29 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
         // A new out-of-app capture changes the spool without touching inbox.md,
         // so the spool must be part of the "anything new?" check (iOS heartbeat parity).
         let spoolRaw = ((try? store.readString(store.spoolURL)) ?? nil) ?? ""
-        if raw == lastSeenDiskRaw && LedgeFormat.trimEdges(spoolRaw).isEmpty { return }
+        if raw == lastSeenDiskRaw && LedgeFormat.trimEdges(spoolRaw).isEmpty {
+            // Nothing new in the file, but the peer may still be stranded on
+            // different bytes; that is exactly the 2026-09-03 evening case,
+            // where both sides were quiet and disagreeing.
+            if let peer = peerLine() {
+                headerLabel.stringValue = "Inbox · " + peer
+                headerLabel.textColor = Theme.attention
+            }
+            return
+        }
         lastSeenDiskRaw = raw
         // New bytes arrived: stamp what this Mac now holds so the phone (and
         // deploy.sh) can see the two devices agree on the inbox.
         writeHeartbeat()
         do {
             var inbox = try store.loadInbox()
-            let drained = (try? store.drainSpool(into: &inbox)) ?? 0
+            // Same ordering rule as prepareForSummon: fold, save, then consume.
+            let batch = try store.drainSpool(into: &inbox)
+            let drained = batch.added
             if drained > 0 {
-                try? store.saveInbox(inbox)
+                try store.saveInbox(inbox)
             }
+            try batch.commit()
             // Capture trust: anything still in the spool after that drain
             // attempt is stuck, and the header must say so even when the
             // editor itself has nothing new to show.

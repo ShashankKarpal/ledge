@@ -116,16 +116,26 @@ public struct Inbox: Equatable {
                 if let existing = days.firstIndex(where: { $0.day == dk }) {
                     // Two sections for one day happen when a damaged header
                     // hid the first one from a writer that then created a
-                    // second. Merge, newest first, dropping exact twins.
-                    var merged = Inbox(days: [days[existing]])
-                    for entry in section.entries.reversed() {
-                        _ = merged.fold([(date: entry.timestamp, text: entry.text, device: entry.device)])
-                    }
+                    // second. Merge, newest first, dropping only EXACT twins.
+                    //
+                    // Not via fold: fold's dedupe key is day+minute+text and is
+                    // device-blind, so two devices capturing the same short
+                    // text in the same minute (a pasted URL, "done") would
+                    // collapse into one and a real capture would be deleted.
+                    // collapseExactDuplicates' key includes the device, and a
+                    // test already pins that requirement (review 2026-09-03).
+                    var combined = days[existing]
+                    combined.entries.append(contentsOf: section.entries)
+                    combined.entries.sort { $0.timestamp > $1.timestamp }
+                    var deduped = Inbox(days: [combined])
+                    _ = deduped.collapseExactDuplicates()
+                    combined = deduped.days[0]
                     if !section.freeText.isEmpty {
-                        let free = merged.days[0].freeText
-                        merged.days[0].freeText = free.isEmpty ? section.freeText : free + "\n" + section.freeText
+                        combined.freeText = combined.freeText.isEmpty
+                            ? section.freeText
+                            : combined.freeText + "\n" + section.freeText
                     }
-                    days[existing] = merged.days[0]
+                    days[existing] = combined
                     repairs.append("merged a second section for " + dk)
                 } else {
                     days.append(section)

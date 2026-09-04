@@ -24,15 +24,19 @@ final class SessionManager: NSObject, WCSessionDelegate {
         session.activate()
     }
 
-    private func handle(_ payload: [String: Any]) {
-        guard let text = payload["text"] as? String, !text.isEmpty else { return }
+    /// Write the payload and report where it landed. Synchronous on the write
+    /// queue on purpose: the reply handler must not acknowledge a capture that
+    /// is still in flight.
+    @discardableResult
+    private func handle(_ payload: [String: Any]) -> SpoolWriter.Landing {
+        guard let text = payload["text"] as? String, !text.isEmpty else { return .spool }
         let stamp = payload["stamp"] as? String
         let date = stamp.flatMap { LedgeFormat.spoolFormatter.date(from: $0) } ?? Date()
         // The watch's delivery id rides along into the spool line so the drain
         // can drop a second delivery of the same capture (live message whose
         // reply timed out, then the queued fallback).
         let id = payload["id"] as? String
-        writeQueue.async {
+        return writeQueue.sync {
             SpoolWriter.append(text: text, at: date, device: "Apple Watch", id: id)
         }
     }
@@ -69,7 +73,12 @@ final class SessionManager: NSObject, WCSessionDelegate {
         didReceiveMessage message: [String: Any],
         replyHandler: @escaping ([String: Any]) -> Void
     ) {
-        handle(message)
-        replyHandler(["received": true])
+        // Acknowledge ONLY what is durable. The old code queued the append
+        // asynchronously and replied "received: true" immediately, so the
+        // watch stopped retrying while the write was still in flight; if that
+        // write and the pending-queue fallback both failed, the thought was
+        // gone with nothing left to retry (review 2026-09-03).
+        let landing = handle(message)
+        replyHandler(["received": landing != .failed])
     }
 }

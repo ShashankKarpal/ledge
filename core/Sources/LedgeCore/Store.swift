@@ -141,6 +141,9 @@ public final class LedgeStore {
         if !report.repairs.isEmpty {
             // Rewrite in canonical form so every other device parses the
             // same structure we just displayed. Snapshot first, as always.
+            // The rewrite goes through the throwing save below, so a repair
+            // that could not be persisted is reported as a failure instead of
+            // being announced as done (independent review, 2026-09-03).
             snapshot(inboxURL)
             dirty = true
         }
@@ -158,9 +161,45 @@ public final class LedgeStore {
             dirty = true
         }
         if dirty {
-            try? saveInbox(inbox)
+            do {
+                try saveInbox(inbox)
+            } catch {
+                // A repair we could not write must not be announced as done:
+                // the next load would re-report it and the surfaces would
+                // claim a fix that never reached disk. Say it is pending.
+                if !lastLoadRepairs.isEmpty {
+                    lastLoadRepairs = lastLoadRepairs.map { $0 + " (not saved yet)" }
+                }
+            }
         }
         return inbox
+    }
+
+    /// Conflict versions whose entries have been folded into an in-memory
+    /// inbox but not yet written to disk. Marked resolved only after a save
+    /// succeeds, because resolving one tells iCloud it may discard it.
+    #if os(macOS) || os(iOS)
+    private var pendingConflictVersions: [NSFileVersion] = []
+
+    private func resolvePendingConflictVersions() {
+        for version in pendingConflictVersions {
+            version.isResolved = true
+        }
+        pendingConflictVersions.removeAll()
+    }
+    #else
+    private func resolvePendingConflictVersions() {}
+    #endif
+
+    /// Keep both sides of free-form text when a merge finds them different.
+    /// Duplicates are recoverable; deleted text is not.
+    static func mergedText(_ disk: String, _ ours: String) -> String {
+        let a = LedgeFormat.trimEdges(disk)
+        let b = LedgeFormat.trimEdges(ours)
+        if b.isEmpty { return a }
+        if a.isEmpty { return b }
+        if a == b || a.contains(b) { return a }
+        return a + "\n" + b
     }
 
     /// Fold iCloud conflict versions (the losers of a sync race) back into the
@@ -174,13 +213,19 @@ public final class LedgeStore {
         guard let conflicts = NSFileVersion.unresolvedConflictVersionsOfItem(at: inboxURL), !conflicts.isEmpty else { return 0 }
         var folded = 0
         for version in conflicts {
-            if let content = try? String(contentsOf: version.url, encoding: .utf8) {
-                let lost = Inbox.parse(content)
-                for item in lost.allEntries().reversed() {
-                    folded += inbox.fold([(date: item.entry.timestamp, text: item.entry.text, device: item.entry.device)])
-                }
+            // Resolve ONLY what we actually read. The old code marked every
+            // version resolved outside the `if let`, so a version whose bytes
+            // were not local yet (the common case for one iCloud just handed
+            // us) was discarded unread and its entries were gone for good.
+            // Versions are also left unresolved until the caller's save
+            // succeeds; pendingConflictVersions carries them until then
+            // (review 2026-09-03).
+            guard let content = try? String(contentsOf: version.url, encoding: .utf8) else { continue }
+            let lost = Inbox.parse(content)
+            for item in lost.allEntries().reversed() {
+                folded += inbox.fold([(date: item.entry.timestamp, text: item.entry.text, device: item.entry.device)])
             }
-            version.isResolved = true
+            pendingConflictVersions.append(version)
         }
         return folded
         #else
@@ -222,6 +267,18 @@ public final class LedgeStore {
                     for item in outgoing.allEntries().reversed() {
                         _ = merged.fold([(date: item.entry.timestamp, text: item.entry.text, device: item.entry.device)])
                     }
+                    // Entries are not the only content. The Mac editor is a raw
+                    // text view over the whole file, so anything typed above the
+                    // first day header lives in `preamble`, and day-header junk
+                    // that carries words lives in `freeText`. The old merge
+                    // folded entries only and threw both away, silently, while
+                    // reporting a successful save (review 2026-09-03).
+                    merged.preamble = Self.mergedText(merged.preamble, outgoing.preamble)
+                    for day in outgoing.days where !day.freeText.isEmpty {
+                        if let index = merged.days.firstIndex(where: { $0.day == day.day }) {
+                            merged.days[index].freeText = Self.mergedText(merged.days[index].freeText, day.freeText)
+                        }
+                    }
                     outgoing = merged
                 }
                 try outgoing.serialized().write(to: actualURL, atomically: true, encoding: .utf8)
@@ -231,6 +288,9 @@ public final class LedgeStore {
         }
         if let error = innerError { throw error }
         if let error = coordinationError { throw error }
+        // The write stuck, so any conflict versions we folded in are safely
+        // represented on disk and may now be released.
+        resolvePendingConflictVersions()
         #else
         var outgoing = inbox
         if let diskStamp = modificationDate(of: inboxURL), diskStamp != readStamp(for: inboxURL) {
@@ -248,34 +308,60 @@ public final class LedgeStore {
         recordReadStamp(for: inboxURL)
     }
 
-    /// Fold pending spool captures into the inbox and truncate the spool.
-    /// Returns the number of captures folded. Caller saves the inbox afterwards.
+    /// What a drain folded, and what it will consume once the inbox is safely
+    /// on disk. Nothing is destroyed until `commit()` is called.
+    public struct DrainedBatch {
+        public let added: Int
+        fileprivate let consumed: String
+        fileprivate let ids: [String]
+        fileprivate let store: LedgeStore
+
+        /// Consume the spool bytes and record the delivery ids. Call ONLY after
+        /// the inbox holding these captures has been written successfully.
+        public func commit() throws {
+            guard !consumed.isEmpty else { return }
+            try store.truncateSpool(consumed: consumed)
+            store.recordSeenCaptureIDs(ids)
+        }
+    }
+
+    /// Fold pending spool captures into the inbox. Returns a batch the caller
+    /// must `commit()` after a successful save.
+    ///
+    /// THE ORDERING IS THE WHOLE POINT (capture-loss bug found 2026-09-03
+    /// night). This used to truncate drop.md and burn the delivery ids into
+    /// the seen ledger inside the drain, while the folded entries existed only
+    /// in the caller's local `var`. Every caller can then fail to save, and
+    /// `saveInbox` throws BY DESIGN when the disk bytes changed and cannot be
+    /// read, which is exactly when a drain is likely. One Mac call site even
+    /// swallowed that save with `try?`. Result: a watch capture that is in
+    /// neither file, with its id marked delivered so a retry is dropped too.
     ///
     /// Captures carrying a delivery id (the watch relay stamps one) are folded
     /// at most once ever: ids already in the seen-ids ledger are dropped, even
     /// across separate drain batches on separate days or devices. This is what
     /// makes the relay's deliver-at-least-once retries safe.
-    @discardableResult
-    public func drainSpool(into inbox: inout Inbox) throws -> Int {
-        guard let raw = try readString(spoolURL), !LedgeFormat.trimEdges(raw).isEmpty else { return 0 }
+    public func drainSpool(into inbox: inout Inbox) throws -> DrainedBatch {
+        let empty = DrainedBatch(added: 0, consumed: "", ids: [], store: self)
+        guard let raw = try readString(spoolURL), !LedgeFormat.trimEdges(raw).isEmpty else { return empty }
         let fallback = modificationDate(of: spoolURL) ?? Date()
         let captures = Spool.parse(raw, fallbackDate: fallback)
         guard !captures.isEmpty else {
             // Non-empty bytes that parse to nothing are corruption residue
             // (e.g. a null-byte run); clear them so they never surface as a
-            // phantom waiting capture.
+            // phantom waiting capture. Nothing was folded, so there is nothing
+            // to lose by clearing them here.
             try truncateSpool(consumed: raw)
-            return 0
+            return empty
         }
         let seen = seenCaptureIDs()
         let fresh = captures.filter { $0.id == nil || !seen.contains($0.id!) }
         snapshot(inboxURL)
         let added = inbox.fold(fresh.map { (date: $0.date, text: $0.text, device: $0.device) })
-        try truncateSpool(consumed: raw)
         // Every id in the batch was consumed (folded, or skipped as a text
-        // duplicate of something already present), so all of them are seen.
-        recordSeenCaptureIDs(captures.compactMap(\.id))
-        return added
+        // duplicate of something already present), so all of them are seen
+        // once the caller commits.
+        return DrainedBatch(added: added, consumed: raw, ids: captures.compactMap(\.id), store: self)
     }
 
     /// The seen-ids ledger, read leniently: a missing or unreadable ledger
@@ -305,7 +391,11 @@ public final class LedgeStore {
     /// we were folding stay in place for the next drain instead of being wiped.
     /// Internal for tests.
     func truncateSpool(consumed: String) throws {
-        let current = ((try? readString(spoolURL)) ?? nil) ?? consumed
+        // A read we could not perform is NOT evidence that the file still
+        // holds exactly what we folded. The old fallback (`?? consumed`) made
+        // an unreadable spool look identical and then wrote "" over it,
+        // destroying anything that had arrived since (review 2026-09-03).
+        guard let current = try readString(spoolURL) else { return }
         if current == consumed {
             try writeStringInPlace("", to: spoolURL)
         } else if current.hasPrefix(consumed) {
@@ -485,14 +575,18 @@ public final class LedgeStore {
         return state
     }
 
-    /// Prove the folder grant is real: write and remove a tiny file under
-    /// .ledge/. A security-scoped bookmark that resolves but grants nothing
-    /// (every iOS reinstall does this) fails here instead of later, silently.
-    public func probeWriteAccess() throws {
-        try fm.createDirectory(at: stateURL, withIntermediateDirectories: true)
-        let probe = stateURL.appendingPathComponent(".probe-" + UUID().uuidString)
-        try Data().write(to: probe, options: [])
-        try fm.removeItem(at: probe)
+    /// Prove the folder grant is real by writing this device's heartbeat.
+    /// A security-scoped bookmark that resolves but grants nothing (every iOS
+    /// reinstall does this) throws here instead of failing silently later.
+    ///
+    /// This used to create and delete a uniquely named `.probe-<uuid>` file on
+    /// every connect and every explicit refresh, which is a create plus a
+    /// delete event in a synced folder each time, for no lasting information.
+    /// The heartbeat write is already needed, already throws on a dead grant,
+    /// and replaces one file rather than adding two events. Same proof, no
+    /// churn (self review, 2026-09-03).
+    public func probeWriteAccess(device: String, version: String, platform: String) throws {
+        try writeHeartbeat(device: device, version: version, platform: platform)
     }
 
     /// One device's "I was here" stamp. Lives in .ledge/ as its own file so it
@@ -569,6 +663,11 @@ public final class LedgeStore {
 
     /// Every heartbeat in the folder, newest first. Placeholders are nudged
     /// to download; an unreadable file is skipped, never fatal.
+    ///
+    /// Deliberately does NOT go through readString: that would materialize
+    /// each file and could block the caller up to 1.5 seconds per heartbeat,
+    /// and these are called from the UI. A heartbeat we cannot read locally
+    /// is simply not counted, which is the correct meaning anyway.
     public func readHeartbeats() -> [Heartbeat] {
         guard let items = try? fm.contentsOfDirectory(at: stateURL, includingPropertiesForKeys: nil, options: []) else { return [] }
         var beats: [Heartbeat] = []
@@ -582,22 +681,100 @@ public final class LedgeStore {
                 try? fm.startDownloadingUbiquitousItem(at: real)
                 continue
             }
-            guard isBeat, let raw = ((try? readString(url)) ?? nil),
-                  let beat = try? Self.heartbeatDecoder.decode(Heartbeat.self, from: Data(raw.utf8)) else { continue }
+            guard isBeat, let data = try? Data(contentsOf: url),
+                  let beat = try? Self.heartbeatDecoder.decode(Heartbeat.self, from: data) else { continue }
             beats.append(beat)
         }
         return beats.sorted { $0.at > $1.at }
     }
 
-    /// The muted "last seen" line: the newest heartbeat from any device other
-    /// than this one, but only when it is older than the threshold. Nil when
-    /// healthy or when no other device has ever written one, so the healthy
-    /// case shows nothing (the no-badges rule).
-    public static func peerLine(from beats: [Heartbeat], selfDevice: String, now: Date = Date(), threshold: TimeInterval = 6 * 3600) -> String? {
-        guard let newest = beats.first(where: { $0.device != selfDevice }) else { return nil }
-        let age = now.timeIntervalSince(newest.at)
-        guard age > threshold else { return nil }
-        return "last seen from " + newest.device + ": " + LedgeFormat.roughAge(age)
+    /// The result of a sync-health evaluation. `disagreementSince` must be
+    /// persisted by the caller and handed back on the next call: the duration
+    /// of a digest mismatch is a local observation, and deriving it from the
+    /// peer's heartbeat age (as the first version did) is simply wrong. A peer
+    /// republishing fresh heartbeats with stale bytes would have suppressed
+    /// the warning forever.
+    public struct SyncHealth: Equatable {
+        public var line: String?
+        public var disagreementSince: Date?
+        /// Identifies WHICH mismatch the clock is timing: peer device plus
+        /// both digests. Persist it beside the date and hand both back. A bare
+        /// date is not enough: it outlives the mismatch it was measuring (the
+        /// iOS container survives a reinstall), so a fresh mismatch days later
+        /// would inherit an ancient clock and instantly report "different
+        /// inboxes for 3 days" (self review, 2026-09-03).
+        public var disagreementKey: String?
+
+        public init(line: String?, disagreementSince: Date?, disagreementKey: String? = nil) {
+            self.line = line
+            self.disagreementSince = disagreementSince
+            self.disagreementKey = disagreementKey
+        }
+    }
+
+    /// Two questions, asked in the right order, from the peer heartbeats.
+    ///
+    /// 1. DISAGREEMENT, the fast signal. The peer checked in recently (so its
+    ///    app is alive and would have refreshed its stamp) and still reports
+    ///    different inbox bytes than we hold. After `disagreementGrace` of
+    ///    that, iCloud is demonstrably not delivering between the two. This is
+    ///    exactly the 2026-09-03 evening stall, which went unreported for two
+    ///    hours because only question 2 was being asked, at six hours.
+    /// 2. SILENCE, the slow signal. Nothing from the peer for `silenceThreshold`.
+    ///    Deliberately generous: a phone in a drawer, or a sleeping Mac, has
+    ///    stopped checking in for an innocent reason and must not nag.
+    ///
+    /// A mismatch against a peer that has NOT checked in recently is not
+    /// reported as a disagreement, because a closed app cannot be expected to
+    /// have caught up. That case falls through to the silence rule.
+    public static func evaluatePeer(
+        beats: [Heartbeat],
+        selfDevice: String,
+        selfDigest: String?,
+        disagreementSince: Date?,
+        disagreementKey: String? = nil,
+        now: Date = Date(),
+        liveWindow: TimeInterval = 15 * 60,
+        disagreementGrace: TimeInterval = 300,
+        silenceThreshold: TimeInterval = 2 * 3600
+    ) -> SyncHealth {
+        guard let peer = beats.first(where: { $0.device != selfDevice }) else {
+            return SyncHealth(line: nil, disagreementSince: nil)
+        }
+        let age = now.timeIntervalSince(peer.at)
+        let mismatched: Bool
+        if let selfDigest, let peerDigest = peer.inboxDigest {
+            mismatched = peerDigest != selfDigest
+        } else {
+            mismatched = false
+        }
+
+        if mismatched, age <= liveWindow {
+            let key = peer.device + "|" + (peer.inboxDigest ?? "-") + "|" + (selfDigest ?? "-")
+            // Keep the clock only if it belongs to THIS mismatch and is not
+            // absurdly old; otherwise start counting now.
+            let inherited = (disagreementKey == key) ? disagreementSince : nil
+            let bounded = inherited.flatMap { now.timeIntervalSince($0) <= silenceThreshold ? $0 : nil }
+            let since = bounded ?? now
+            let held = now.timeIntervalSince(since)
+            if held >= disagreementGrace {
+                return SyncHealth(
+                    line: peer.device + " and this device have shown different inboxes for "
+                        + LedgeFormat.roughDuration(held) + ". iCloud is not delivering.",
+                    disagreementSince: since,
+                    disagreementKey: key
+                )
+            }
+            return SyncHealth(line: nil, disagreementSince: since, disagreementKey: key)
+        }
+
+        if age > silenceThreshold {
+            return SyncHealth(
+                line: "last seen from " + peer.device + ": " + LedgeFormat.roughAge(age),
+                disagreementSince: nil
+            )
+        }
+        return SyncHealth(line: nil, disagreementSince: nil)
     }
 
     // MARK: iCloud materialization
@@ -686,16 +863,32 @@ public final class LedgeStore {
         var coordinationError: NSError?
         var readError: Error?
         var result: String?
+        var stampAtRead: Date?
         NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &coordinationError) { actualURL in
             do {
                 result = try String(contentsOf: actualURL, encoding: .utf8)
+                // Take the stamp INSIDE the lock, next to the bytes it
+                // describes. Reading it afterwards left a window where another
+                // coordinated writer (the sync daemon applying the other
+                // device's update) landed first, so we stored THEIR mtime as
+                // our read stamp; saveInbox's guard then compared equal, skipped
+                // the merge, and wrote our stale parse over their bytes. The
+                // very clobber the merge guard exists to prevent (review
+                // 2026-09-03).
+                stampAtRead = self.modificationDate(of: actualURL)
             } catch {
                 readError = error
             }
         }
         if let error = readError { throw error }
         if let error = coordinationError { throw error }
-        recordReadStamp(for: url)
+        stampLock.lock()
+        if let stampAtRead {
+            lastReadStamps[url.path] = stampAtRead
+        } else {
+            lastReadStamps.removeValue(forKey: url.path)
+        }
+        stampLock.unlock()
         return result
         #else
         let result = try String(contentsOf: url, encoding: .utf8)
@@ -760,6 +953,140 @@ public final class LedgeStore {
         } else {
             try data.write(to: url, options: [])
         }
+        #endif
+    }
+
+    // MARK: Incident log
+
+    public var incidentsURL: URL { stateURL.appendingPathComponent("incidents.log") }
+
+    /// Record the last install this device performed, so an incident can say
+    /// how long after a reinstall it began. Written by deploy.sh and by the
+    /// apps on a version change.
+    public var lastInstallURL: URL { stateURL.appendingPathComponent("last-install.txt") }
+
+    public func readIncidents() -> [SyncIncident] {
+        guard let data = try? Data(contentsOf: incidentsURL) else { return [] }
+        return IncidentLog.parse(String(decoding: data, as: UTF8.self))
+    }
+
+    /// Read, fold in the observation, write back. Best effort by design: an
+    /// incident log that blocks a capture would be worse than no log at all.
+    @discardableResult
+    public func noteIncident(_ incident: SyncIncident) -> Bool {
+        let updated = IncidentLog.record(incident, into: readIncidents())
+        return (try? writeString(IncidentLog.serialize(updated), to: incidentsURL)) != nil
+    }
+
+    @discardableResult
+    public func closeIncident(kind: SyncIncident.Kind, observer: String, peer: String?, at date: Date = Date()) -> Bool {
+        let current = readIncidents()
+        guard current.contains(where: {
+            $0.kind == kind && $0.observer == observer && $0.peer == peer && $0.endedAt == nil
+        }) else { return false }
+        let updated = IncidentLog.close(kind: kind, observer: observer, peer: peer, at: date, in: current)
+        return (try? writeString(IncidentLog.serialize(updated), to: incidentsURL)) != nil
+    }
+
+    /// Seconds between the newest recorded install and `now`, if one is known.
+    public func secondsSinceLastInstall(now: Date = Date()) -> TimeInterval? {
+        guard let raw = try? String(contentsOf: lastInstallURL, encoding: .utf8),
+              let stamp = ISO8601DateFormatter().date(from: raw.trimmingCharacters(in: .whitespacesAndNewlines))
+        else { return nil }
+        return now.timeIntervalSince(stamp)
+    }
+
+    // MARK: Append transactions
+    //
+    // One coordinated block per operation. A read in one coordination block
+    // followed by a whole-file write in another is not a lock: two writers can
+    // both read the same bytes and the second write erases the first capture.
+    // Everything that adds a line to the spool or the pending queue goes
+    // through these (review 2026-09-03).
+
+    /// Append one spool line to capture/drop.md under a single coordinated
+    /// write, preserving the file's identity for out-of-process bookmarks.
+    public func appendSpoolLine(_ line: String) throws {
+        try fm.createDirectory(at: captureURL, withIntermediateDirectories: true)
+        try Self.appendLine(line, to: spoolURL)
+    }
+
+    /// Append one line to any file, in place, inside one coordinated write.
+    public static func appendLine(_ line: String, to url: URL) throws {
+        let fm = FileManager.default
+        try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        #if canImport(Darwin)
+        var coordinationError: NSError?
+        var innerError: Error?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: &coordinationError) { actualURL in
+            do {
+                try appendLineUncoordinated(line, to: actualURL)
+            } catch {
+                innerError = error
+            }
+        }
+        if let error = innerError { throw error }
+        if let error = coordinationError { throw error }
+        #else
+        try appendLineUncoordinated(line, to: url)
+        #endif
+    }
+
+    private static func appendLineUncoordinated(_ line: String, to url: URL) throws {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: url.path) else {
+            try Data((line + "\n").utf8).write(to: url, options: [])
+            return
+        }
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
+        let end = try handle.seekToEnd()
+        var payload = line + "\n"
+        if end > 0 {
+            // Only add a separator when the file does not already end in one.
+            let existing = (try? Data(contentsOf: url)) ?? Data()
+            if existing.last != UInt8(ascii: "\n") { payload = "\n" + payload }
+        }
+        try handle.write(contentsOf: Data(payload.utf8))
+        try handle.synchronize()
+    }
+
+    /// Remove exactly `consumed` from the front of a file, leaving anything
+    /// appended since. Used to retire a pending queue after its contents
+    /// reached the spool, without discarding a capture that arrived meanwhile.
+    public static func consumePrefix(_ consumed: String, of url: URL) throws {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: url.path) else { return }
+        #if canImport(Darwin)
+        var coordinationError: NSError?
+        var innerError: Error?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: &coordinationError) { actualURL in
+            do {
+                guard let raw = try? String(contentsOf: actualURL, encoding: .utf8) else { return }
+                let remainder: String
+                if raw == consumed {
+                    remainder = ""
+                } else if raw.hasPrefix(consumed) {
+                    remainder = String(raw.dropFirst(consumed.count))
+                } else {
+                    // Rewritten underneath us: leave it entirely alone.
+                    return
+                }
+                if remainder.isEmpty {
+                    try fm.removeItem(at: actualURL)
+                } else {
+                    let handle = try FileHandle(forWritingTo: actualURL)
+                    defer { try? handle.close() }
+                    try handle.truncate(atOffset: 0)
+                    try handle.write(contentsOf: Data(remainder.utf8))
+                    try handle.synchronize()
+                }
+            } catch {
+                innerError = error
+            }
+        }
+        if let error = innerError { throw error }
+        if let error = coordinationError { throw error }
         #endif
     }
 

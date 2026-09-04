@@ -37,6 +37,13 @@ public enum LedgeFormat {
     /// The parser then demoted every entry under it to preamble, which the Mac
     /// renders as normal text and the phone does not render at all. Sync looked
     /// dead for a morning while the bytes were identical on both devices.
+    /// LENIENCY IS DELIBERATELY NARROW. Only punctuation-shaped damage counts:
+    /// a stray backtick, quote or bracket typed onto a machine-written header,
+    /// which is the incident this exists for. A line like
+    /// `## 2026-01-15 planning` stays ordinary content, because a wider rule
+    /// lets any body line that happens to start with `## ` plus a date tear an
+    /// entry in half and relocate its tail into a phantom day (review
+    /// 2026-09-03). If the junk contains a letter or a digit, it is prose.
     public static func dayHeaderKey(_ line: String) -> (day: String, junk: String)? {
         guard line.hasPrefix(dayHeaderPrefix) else { return nil }
         let rest = String(line.dropFirst(dayHeaderPrefix.count)).trimmingCharacters(in: .whitespaces)
@@ -45,6 +52,7 @@ public enum LedgeFormat {
         guard candidate.range(of: "^\\d{4}-\\d{2}-\\d{2}$", options: .regularExpression) != nil,
               dayFormatter.date(from: candidate) != nil else { return nil }
         let junk = String(rest.dropFirst(10)).trimmingCharacters(in: .whitespaces)
+        guard junk.isEmpty || junk.rangeOfCharacter(from: .alphanumerics) == nil else { return nil }
         return (candidate, junk)
     }
 
@@ -105,6 +113,23 @@ public enum LedgeFormat {
         }
         while out.hasSuffix("-") { out.removeLast() }
         return out.isEmpty ? "note" : out
+    }
+
+    /// "5 minutes", "4 hours", "2 days": a duration, for sentences that
+    /// already supply their own preposition ("for 5 minutes").
+    public static func roughDuration(_ seconds: TimeInterval) -> String {
+        let s = max(0, seconds)
+        if s < 60 { return "under a minute" }
+        if s < 3600 {
+            let m = Int(s / 60)
+            return m == 1 ? "1 minute" : "\(m) minutes"
+        }
+        if s < 86400 {
+            let h = Int(s / 3600)
+            return h == 1 ? "1 hour" : "\(h) hours"
+        }
+        let d = Int(s / 86400)
+        return d == 1 ? "1 day" : "\(d) days"
     }
 
     /// "4 hours ago", "2 days ago", "just now": the rough wording the sync

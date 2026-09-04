@@ -1,8 +1,17 @@
 // Shared capture helper for out-of-app writers (App Intents, watch relay).
 // Writes Spool lines into capture/drop.md, never edits inbox.md directly.
 // When the folder is unreachable the capture lands in a local pending queue
-// that the app flushes on its next launch. Capture never fails.
+// that the app flushes on its next launch. Capture never fails silently.
 // Built by Claude (Anthropic).
+//
+// TRANSACTION RULE (review 2026-09-03). Every write here is ONE coordinated
+// append. The previous shape read the file in one coordinated block and
+// rewrote the whole file in another, which is not a lock: two App Intents, or
+// an Intent and the watch relay, could both read the same bytes and the second
+// rewrite would erase the first capture. Appending inside a single coordination
+// block cannot lose a concurrent write, and it preserves the file's identity,
+// which the Shortcuts "Append to Text File" bookmark depends on
+// (incident 2026-07-27).
 
 import Foundation
 import LedgeCore
@@ -33,16 +42,28 @@ enum SpoolWriter {
         return (url, started)
     }
 
+    /// Where a capture ended up. Callers that can tell the user the truth
+    /// (App Intents, the watch relay) must branch on this instead of assuming.
+    enum Landing: Equatable {
+        /// Written into the shared folder's spool. Every device will see it.
+        case spool
+        /// Written to this device's local queue; it reaches the folder later.
+        case pending
+        /// Nothing was written anywhere. The capture is LOST unless the caller
+        /// keeps it. Only returned when even the local queue write failed.
+        case failed
+    }
+
     /// Append one capture to capture/drop.md, falling back to the pending queue.
     /// `id` is the watch relay's delivery id; drain dedupes repeat deliveries by it.
-    static func append(text: String, at date: Date, device: String? = nil, id: String? = nil) {
+    @discardableResult
+    static func append(text: String, at date: Date, device: String? = nil, id: String? = nil) -> Landing {
         let trimmed = LedgeFormat.trimEdges(text)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty else { return .spool }
         let line = Spool.line(for: trimmed, at: date, device: device, id: id)
 
         guard let resolved = resolveRoot() else {
-            appendToPending(line)
-            return
+            return appendToPending(line)
         }
         defer {
             if resolved.started { resolved.url.stopAccessingSecurityScopedResource() }
@@ -50,24 +71,25 @@ enum SpoolWriter {
 
         let store = LedgeStore(root: resolved.url)
         do {
-            let existing = (try store.readString(store.spoolURL)) ?? ""
-            var combined = existing
-            if !combined.isEmpty && !combined.hasSuffix("\n") { combined += "\n" }
-            combined += line + "\n"
-            try store.writeStringInPlace(combined, to: store.spoolURL)
+            try store.appendSpoolLine(line)
+            return .spool
         } catch {
-            appendToPending(line)
+            return appendToPending(line)
         }
     }
 
     /// Append one already-formatted spool line to the local pending queue.
-    static func appendToPending(_ line: String) {
-        let url = pendingURL
-        let existing = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
-        var combined = existing
-        if !combined.isEmpty && !combined.hasSuffix("\n") { combined += "\n" }
-        combined += line + "\n"
-        try? combined.write(to: url, atomically: true, encoding: .utf8)
+    /// Coordinated and append-only for the same reason as the spool: this is
+    /// the last line of defence and it used to be an unchecked `try?` over a
+    /// whole-file rewrite.
+    @discardableResult
+    static func appendToPending(_ line: String) -> Landing {
+        do {
+            try LedgeStore.appendLine(line, to: pendingURL)
+            return .pending
+        } catch {
+            return .failed
+        }
     }
 
     /// Read the pending queue without touching it. Nil when nothing is waiting.
@@ -76,8 +98,10 @@ enum SpoolWriter {
         return LedgeFormat.trimEdges(raw).isEmpty ? nil : raw
     }
 
-    /// Clear the pending queue. Call only after its contents reached the spool.
-    static func clearPending() {
-        try? FileManager.default.removeItem(at: pendingURL)
+    /// Remove exactly the bytes that were successfully moved into the spool,
+    /// leaving anything appended since. Clearing the whole file could discard a
+    /// capture that arrived while the flush was in flight.
+    static func consumePending(_ consumed: String) throws {
+        try LedgeStore.consumePrefix(consumed, of: pendingURL)
     }
 }

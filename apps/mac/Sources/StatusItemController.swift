@@ -13,6 +13,17 @@ final class StatusItemController: NSObject {
     private let openSettings: () -> Void
     private var popover: NSPopover?
     private let menu = NSMenu()
+    private let syncHealthItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+
+    /// Show or hide the sync-health row. Pass nil when healthy.
+    func setSyncHealth(_ line: String?) {
+        if let line {
+            syncHealthItem.title = line
+            syncHealthItem.isHidden = false
+        } else {
+            syncHealthItem.isHidden = true
+        }
+    }
 
     init(togglePanel: @escaping () -> Void, openFolder: @escaping () -> Void, capture: @escaping (String) -> Bool, openSettings: @escaping () -> Void) {
         self.togglePanel = togglePanel
@@ -50,6 +61,14 @@ final class StatusItemController: NSObject {
         menu.addItem(prefs)
 
         menu.addItem(.separator())
+
+        // Sync health, the one line that is allowed to say something is wrong.
+        // Hidden while healthy, per the no-badges rule. It exists because on
+        // 2026-09-03 the iPhone's iCloud daemon stalled for two hours and no
+        // surface anywhere said so; the panel was tucked away the whole time.
+        syncHealthItem.isEnabled = false
+        syncHealthItem.isHidden = true
+        menu.addItem(syncHealthItem)
 
         let hint = NSMenuItem(title: "Summon: Option+Space · Esc tucks away", action: nil, keyEquivalent: "")
         hint.isEnabled = false

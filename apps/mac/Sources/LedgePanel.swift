@@ -38,6 +38,15 @@ final class PanelController {
         didSet { content?.maintenanceFailure = maintenanceFailure }
     }
 
+    /// Supplied by the app delegate, which owns the throttled heartbeat writer
+    /// and the persisted disagreement clock.
+    var syncHealthProvider: (() -> String?)? {
+        didSet { content?.syncHealthProvider = syncHealthProvider }
+    }
+    var heartbeatWriter: ((Bool) -> Void)? {
+        didSet { content?.heartbeatWriter = heartbeatWriter }
+    }
+
     /// Live settings update from the Settings window. Width applies to the
     /// open panel immediately and to every future summon.
     func apply(_ newSettings: LedgeSettings) {
@@ -161,6 +170,8 @@ final class PanelController {
         self.panel = panel
         self.content = contentVC
         contentVC.maintenanceFailure = maintenanceFailure
+        contentVC.syncHealthProvider = syncHealthProvider
+        contentVC.heartbeatWriter = heartbeatWriter
         return panel
     }
 

@@ -13,6 +13,16 @@ final class LedgeCoreTests: XCTestCase {
         return d
     }
 
+    /// Drain and commit: the shape every successful caller now uses. The
+    /// two-step API exists so a failed save cannot destroy the spool, so the
+    /// tests that only care about a healthy round trip use this helper.
+    @discardableResult
+    func drainAndCommit(_ store: LedgeStore, into inbox: inout Inbox) throws -> Int {
+        let batch = try store.drainSpool(into: &inbox)
+        try batch.commit()
+        return batch.added
+    }
+
     func makeTempStore() throws -> LedgeStore {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("LedgeTests-" + UUID().uuidString, isDirectory: true)
@@ -149,7 +159,7 @@ final class LedgeCoreTests: XCTestCase {
         let line = Spool.line(for: "from the phone", at: date("2026-07-19 14:05"))
         try store.writeString(line + "\n" + line + "\n", to: store.spoolURL)
 
-        let added = try store.drainSpool(into: &inbox)
+        let added = try drainAndCommit(store, into: &inbox)
         XCTAssertEqual(added, 1)
         XCTAssertTrue(inbox.allEntries().contains { $0.entry.text == "from the phone" })
 
@@ -158,7 +168,7 @@ final class LedgeCoreTests: XCTestCase {
         XCTAssertEqual(LedgeFormat.trimEdges(after), "")
 
         // Draining again adds nothing.
-        XCTAssertEqual(try store.drainSpool(into: &inbox), 0)
+        XCTAssertEqual(try drainAndCommit(store, into: &inbox), 0)
     }
 
     // MARK: Capture trust (the stale-spool check)
@@ -410,12 +420,12 @@ final class LedgeCoreTests: XCTestCase {
         let line = Spool.line(for: "a twin delivery from the wrist", at: date("2026-08-17 09:27"), device: "Apple Watch", id: "DUP-1")
 
         try store.writeStringInPlace(line + "\n", to: store.spoolURL)
-        XCTAssertEqual(try store.drainSpool(into: &inbox), 1)
+        XCTAssertEqual(try drainAndCommit(store, into: &inbox), 1)
         try store.saveInbox(inbox)
 
         // Second delivery arrives after the first batch fully drained.
         try store.writeStringInPlace(line + "\n", to: store.spoolURL)
-        XCTAssertEqual(try store.drainSpool(into: &inbox), 0)
+        XCTAssertEqual(try drainAndCommit(store, into: &inbox), 0)
         let matches = inbox.allEntries().filter { $0.entry.text == "a twin delivery from the wrist" }
         XCTAssertEqual(matches.count, 1)
     }
@@ -428,7 +438,7 @@ final class LedgeCoreTests: XCTestCase {
         var inbox = try store.loadInbox()
         let line = Spool.line(for: "original text", at: date("2026-08-17 09:27"), device: "Apple Watch", id: "DUP-2")
         try store.writeStringInPlace(line + "\n", to: store.spoolURL)
-        XCTAssertEqual(try store.drainSpool(into: &inbox), 1)
+        XCTAssertEqual(try drainAndCommit(store, into: &inbox), 1)
 
         for dayIndex in inbox.days.indices {
             for entryIndex in inbox.days[dayIndex].entries.indices
@@ -438,7 +448,7 @@ final class LedgeCoreTests: XCTestCase {
         }
 
         try store.writeStringInPlace(line + "\n", to: store.spoolURL)
-        XCTAssertEqual(try store.drainSpool(into: &inbox), 0)
+        XCTAssertEqual(try drainAndCommit(store, into: &inbox), 0)
         XCTAssertFalse(inbox.allEntries().contains { $0.entry.text == "original text" })
     }
 
@@ -447,7 +457,7 @@ final class LedgeCoreTests: XCTestCase {
         var inbox = try store.loadInbox()
         let line = Spool.line(for: "double in one batch", at: date("2026-08-17 09:30"), device: "Apple Watch", id: "DUP-3")
         try store.writeStringInPlace(line + "\n" + line + "\n", to: store.spoolURL)
-        XCTAssertEqual(try store.drainSpool(into: &inbox), 1)
+        XCTAssertEqual(try drainAndCommit(store, into: &inbox), 1)
     }
 
     func testCapturesWithoutIDsStillFoldAndTextDedupStillStands() throws {
@@ -457,9 +467,9 @@ final class LedgeCoreTests: XCTestCase {
         var inbox = try store.loadInbox()
         let line = Spool.line(for: "plain shortcuts capture", at: date("2026-08-17 09:35"))
         try store.writeStringInPlace(line + "\n", to: store.spoolURL)
-        XCTAssertEqual(try store.drainSpool(into: &inbox), 1)
+        XCTAssertEqual(try drainAndCommit(store, into: &inbox), 1)
         try store.writeStringInPlace(line + "\n", to: store.spoolURL)
-        XCTAssertEqual(try store.drainSpool(into: &inbox), 0)
+        XCTAssertEqual(try drainAndCommit(store, into: &inbox), 0)
     }
 
     func testSeenIDLedgerIsCappedAt500() throws {
@@ -519,11 +529,242 @@ final class LedgeCoreTests: XCTestCase {
         let store = try makeTempStore()
         var inbox = try store.loadInbox()
         try store.writeStringInPlace(String(repeating: "\u{0000}", count: 64), to: store.spoolURL)
-        XCTAssertEqual(try store.drainSpool(into: &inbox), 0)
+        XCTAssertEqual(try drainAndCommit(store, into: &inbox), 0)
         let after = ((try store.readString(store.spoolURL)) ?? nil) ?? ""
         XCTAssertEqual(after, "")
         // And the waiting-line math sees nothing, not a phantom capture.
         XCTAssertEqual(Spool.status("\u{0000}\u{0000}", fallbackDate: date("2026-08-17 09:00")), .empty)
+    }
+
+    // MARK: Incident log (so the relay decision rests on counts, not memory)
+
+    func testIncidentIsExtendedNotDuplicatedWhileItContinues() {
+        let start = date("2026-09-03 17:10")
+        let one = SyncIncident(kind: .disagreement, observer: "iPhone", startedAt: start,
+                               peer: "MacBook M4", version: "0.4.4")
+        var log = IncidentLog.record(one, into: [])
+        // The same condition observed again 40 times must stay ONE incident.
+        for _ in 0..<40 {
+            log = IncidentLog.record(one, into: log)
+        }
+        XCTAssertEqual(log.count, 1, "a two hour stall is one incident, not forty")
+
+        // Closing it gives it a duration; a later stall is a separate incident.
+        log = IncidentLog.close(kind: .disagreement, observer: "iPhone", peer: "MacBook M4",
+                                at: date("2026-09-03 19:20"), in: log)
+        XCTAssertEqual(log[0].duration, 2 * 3600 + 600)
+        log = IncidentLog.record(
+            SyncIncident(kind: .disagreement, observer: "iPhone", startedAt: date("2026-09-04 09:00"),
+                         peer: "MacBook M4", version: "0.4.4"),
+            into: log
+        )
+        XCTAssertEqual(log.count, 2)
+    }
+
+    func testIncidentSummaryAnswersTheRelayQuestion() {
+        let base = date("2026-09-03 17:10")
+        let log = [
+            SyncIncident(kind: .disagreement, observer: "iPhone", startedAt: base,
+                         endedAt: base.addingTimeInterval(2 * 3600), peer: "MacBook M4",
+                         version: "0.4.4", secondsAfterInstall: 240),
+            SyncIncident(kind: .disagreement, observer: "iPhone", startedAt: base.addingTimeInterval(86_400),
+                         endedAt: base.addingTimeInterval(86_400 + 600), peer: "MacBook M4",
+                         version: "0.4.4", secondsAfterInstall: 90_000)
+        ]
+        let summary = IncidentLog.summary(of: log, since: base.addingTimeInterval(-86_400))
+        XCTAssertEqual(summary.count, 2)
+        XCTAssertEqual(summary.totalDuration, 2 * 3600 + 600)
+        XCTAssertEqual(summary.longest, 2 * 3600)
+        XCTAssertEqual(summary.withinAnHourOfInstall, 1, "exactly the number the relay decision turns on")
+        XCTAssertEqual(summary.ongoing, 0)
+        XCTAssertEqual(summary.line, "2 sync incidents in the window, 2 hours total")
+    }
+
+    func testIncidentLogRoundTripsAndIsCapped() {
+        var log: [SyncIncident] = []
+        for i in 0..<(IncidentLog.maxEntries + 50) {
+            log.append(SyncIncident(kind: .disagreement, observer: "iPhone",
+                                    startedAt: date("2026-09-03 09:00").addingTimeInterval(Double(i) * 60),
+                                    endedAt: date("2026-09-03 09:01").addingTimeInterval(Double(i) * 60),
+                                    peer: "MacBook M4", version: "0.4.4"))
+        }
+        let parsed = IncidentLog.parse(IncidentLog.serialize(log))
+        XCTAssertEqual(parsed.count, IncidentLog.maxEntries, "the log must never grow without bound")
+        XCTAssertEqual(parsed.last, log.last, "and it keeps the NEWEST entries")
+        // A corrupt line is skipped, never fatal.
+        XCTAssertEqual(IncidentLog.parse("not json\n" + IncidentLog.serialize([log[0]])).count, 1)
+    }
+
+    func testIncidentLogPersistsThroughTheStore() throws {
+        let store = try makeTempStore()
+        XCTAssertEqual(store.readIncidents().count, 0)
+        XCTAssertTrue(store.noteIncident(SyncIncident(
+            kind: .disagreement, observer: "MacBook M4", startedAt: date("2026-09-04 10:00"),
+            peer: "iPhone", version: "0.4.4"
+        )))
+        XCTAssertEqual(store.readIncidents().count, 1)
+        XCTAssertTrue(store.closeIncident(kind: .disagreement, observer: "MacBook M4", peer: "iPhone",
+                                          at: date("2026-09-04 10:30")))
+        XCTAssertEqual(store.readIncidents().first?.duration, 1800)
+        // Closing again is a no-op, so a polling caller cannot rewrite the file forever.
+        XCTAssertFalse(store.closeIncident(kind: .disagreement, observer: "MacBook M4", peer: "iPhone",
+                                           at: date("2026-09-04 11:00")))
+        // The log carries no capture text, ever.
+        let raw = try XCTUnwrap(try store.readString(store.incidentsURL))
+        XCTAssertFalse(raw.contains("thought"))
+    }
+
+    // MARK: Append transactions (review 2026-09-03 night)
+
+    func testConcurrentAppendsAllSurvive() throws {
+        // The old writers read the file in one coordinated block and rewrote
+        // the whole file in another, so two writers racing lost one capture.
+        // Every line must survive, in any order.
+        let store = try makeTempStore()
+        let count = 40
+        let group = DispatchGroup()
+        for i in 0..<count {
+            DispatchQueue.global().async(group: group) {
+                try? store.appendSpoolLine(
+                    Spool.line(for: "capture \(i)", at: self.date("2026-09-04 09:00"), device: "iPhone", id: "id-\(i)")
+                )
+            }
+        }
+        XCTAssertEqual(group.wait(timeout: .now() + 30), .success)
+
+        let raw = try XCTUnwrap(try store.readString(store.spoolURL))
+        for i in 0..<count {
+            XCTAssertTrue(raw.contains("capture \(i)"), "capture \(i) was erased by a concurrent append")
+        }
+        // And every one of them folds into the inbox exactly once.
+        var inbox = try store.loadInbox()
+        XCTAssertEqual(try drainAndCommit(store, into: &inbox), count)
+    }
+
+    func testAppendKeepsFileIdentityAndFixesAMissingNewline() throws {
+        let store = try makeTempStore()
+        try store.appendSpoolLine("[[2026-09-04 09:00]] one")
+        let inode = try FileManager.default.attributesOfItem(atPath: store.spoolURL.path)[.systemFileNumber] as? Int
+        // A file whose last write left no trailing newline must not glue the
+        // next capture onto the previous line.
+        try Data("[[2026-09-04 09:01]] two".utf8).write(to: store.spoolURL)
+        try store.appendSpoolLine("[[2026-09-04 09:02]] three")
+        let raw = try XCTUnwrap(try store.readString(store.spoolURL))
+        XCTAssertTrue(raw.contains("two\n[[2026-09-04 09:02]] three"))
+        XCTAssertEqual(Spool.parse(raw, fallbackDate: date("2026-09-04 09:00")).count, 2)
+        let after = try FileManager.default.attributesOfItem(atPath: store.spoolURL.path)[.systemFileNumber] as? Int
+        XCTAssertEqual(inode, after, "appends must never replace the file, or the Shortcuts bookmark dies")
+    }
+
+    func testConsumePrefixLeavesWhatArrivedDuringTheFlush() throws {
+        let store = try makeTempStore()
+        let queue = store.root.appendingPathComponent("pending.md")
+        try LedgeStore.appendLine("[[2026-09-04 09:00]] first", to: queue)
+        let consumed = try XCTUnwrap(try store.readString(queue))
+        // A capture lands while the flush is in flight.
+        try LedgeStore.appendLine("[[2026-09-04 09:01]] late", to: queue)
+        try LedgeStore.consumePrefix(consumed, of: queue)
+        let remainder = try XCTUnwrap(try store.readString(queue))
+        XCTAssertFalse(remainder.contains("first"))
+        XCTAssertTrue(remainder.contains("late"), "a capture appended mid-flush must survive")
+    }
+
+    func testConsumePrefixRemovesTheFileWhenItIsFullyConsumed() throws {
+        let store = try makeTempStore()
+        let queue = store.root.appendingPathComponent("pending.md")
+        try LedgeStore.appendLine("[[2026-09-04 09:00]] only", to: queue)
+        let consumed = try XCTUnwrap(try store.readString(queue))
+        try LedgeStore.consumePrefix(consumed, of: queue)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: queue.path))
+    }
+
+    func testConsumePrefixLeavesAFileThatWasRewrittenUnderneath() throws {
+        let store = try makeTempStore()
+        let queue = store.root.appendingPathComponent("pending.md")
+        try LedgeStore.appendLine("[[2026-09-04 09:00]] first", to: queue)
+        try LedgeStore.consumePrefix("[[2026-09-04 08:00]] something else\n", of: queue)
+        let remainder = try XCTUnwrap(try store.readString(queue))
+        XCTAssertTrue(remainder.contains("first"), "an unrecognised file must be left alone, never cleared")
+    }
+
+    // MARK: Capture durability under failure (review 2026-09-03 night)
+
+    func testSpoolSurvivesADrainWhoseSaveFails() throws {
+        // THE capture-loss bug. drainSpool used to empty drop.md and burn the
+        // delivery ids before any caller saved the inbox, and one Mac caller
+        // swallowed that save with try?. A watch capture could end up in
+        // neither file, with its id marked delivered so a retry was dropped.
+        let store = try makeTempStore()
+        let line = Spool.line(for: "wrist thought", at: date("2026-09-03 21:30"),
+                              device: "Apple Watch", id: "delivery-1")
+        try store.writeStringInPlace(line + "\n", to: store.spoolURL)
+
+        var inbox = try store.loadInbox()
+        let batch = try store.drainSpool(into: &inbox)
+        XCTAssertEqual(batch.added, 1)
+
+        // The save fails. We simulate the caller never committing, which is
+        // what every throwing save path now does.
+        // Nothing may have been consumed yet:
+        let spoolAfter = try XCTUnwrap(try store.readString(store.spoolURL))
+        XCTAssertTrue(spoolAfter.contains("wrist thought"), "the spool must still hold the capture")
+        XCTAssertFalse(store.seenCaptureIDs().contains("delivery-1"), "the id must not be burned")
+
+        // A later attempt succeeds end to end, and only then is it consumed.
+        var retry = try store.loadInbox()
+        let batch2 = try store.drainSpool(into: &retry)
+        XCTAssertEqual(batch2.added, 1, "still foldable, nothing was lost")
+        try store.saveInbox(retry)
+        try batch2.commit()
+        XCTAssertEqual(LedgeFormat.trimEdges(try store.readString(store.spoolURL) ?? ""), "")
+        XCTAssertTrue(store.seenCaptureIDs().contains("delivery-1"))
+        XCTAssertTrue(try store.loadInbox().allEntries().contains { $0.entry.text == "wrist thought" })
+    }
+
+    func testTruncateSpoolRefusesWhenItCannotReadTheSpool() throws {
+        // A failed read is not evidence that the file still holds exactly what
+        // we folded. The old fallback treated it as identical and wrote "".
+        let store = try makeTempStore()
+        try store.writeStringInPlace("[[2026-09-03 21:00]] one\n", to: store.spoolURL)
+        try FileManager.default.removeItem(at: store.spoolURL)
+        // readString returns nil for a file that truly does not exist, so the
+        // guard returns without writing anything, and nothing is created.
+        XCTAssertNoThrow(try store.truncateSpool(consumed: "[[2026-09-03 21:00]] one\n"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: store.spoolURL.path),
+                       "a spool we could not read must not be recreated empty")
+    }
+
+    func testSaveInboxMergeKeepsTextTypedOutsideAnyEntry() throws {
+        // The Mac editor is a raw text view over the whole file, so text typed
+        // above the first day header lives in `preamble`. The merge branch
+        // folded entries only and silently discarded it while reporting a
+        // successful save (review 2026-09-03).
+        let store = try makeTempStore()
+        var mine = try store.loadInbox()
+        mine.preamble = "a thought I typed at the very top"
+        mine.prepend(text: "mine", at: date("2026-09-03 21:00"), device: "MacBook M4")
+
+        // Another device writes the file underneath us, so the next save takes
+        // the merge branch.
+        var theirs = Inbox()
+        theirs.prepend(text: "theirs", at: date("2026-09-03 21:01"), device: "iPhone")
+        try store.writeString(theirs.serialized(), to: store.inboxURL)
+
+        try store.saveInbox(mine)
+        let reloaded = try store.loadInbox()
+        XCTAssertTrue(reloaded.preamble.contains("a thought I typed at the very top"),
+                      "preamble must survive a merge")
+        let texts = reloaded.allEntries().map(\.entry.text)
+        XCTAssertTrue(texts.contains("mine"))
+        XCTAssertTrue(texts.contains("theirs"))
+    }
+
+    func testMergedTextKeepsBothSidesWithoutDuplicating() {
+        XCTAssertEqual(LedgeStore.mergedText("disk", "ours"), "disk\nours")
+        XCTAssertEqual(LedgeStore.mergedText("same", "same"), "same")
+        XCTAssertEqual(LedgeStore.mergedText("", "ours"), "ours")
+        XCTAssertEqual(LedgeStore.mergedText("disk", ""), "disk")
+        XCTAssertEqual(LedgeStore.mergedText("disk and ours", "ours"), "disk and ours")
     }
 
     // MARK: Damaged headers (incident 2026-09-03)
@@ -546,11 +787,18 @@ final class LedgeCoreTests: XCTestCase {
         XCTAssertEqual(Inbox.parse(healed), report.inbox)
     }
 
-    func testDayHeaderJunkWithWordsIsKeptAsFreeText() {
-        let report = Inbox.parseReporting("## 2026-09-03 standup notes\n### 09:00\nx\n")
-        XCTAssertEqual(report.inbox.days[0].day, "2026-09-03")
-        XCTAssertEqual(report.inbox.days[0].freeText, "standup notes")
-        XCTAssertEqual(report.repairs.count, 1)
+    func testDayHeaderWithWordsStaysOrdinaryContent() {
+        // A dated line that carries prose is NOT a header. Treating it as one
+        // let a body line tear an entry in half and relocate its tail into a
+        // phantom day section (review 2026-09-03).
+        XCTAssertNil(LedgeFormat.dayHeaderKey("## 2026-09-03 standup notes"))
+        let source = "## 2026-09-05\n### 10:00\nnotes for\n## 2026-01-15 planning\nmore text\n"
+        let report = Inbox.parseReporting(source)
+        XCTAssertEqual(report.repairs, [], "no repair, because nothing is damaged")
+        XCTAssertEqual(report.inbox.days.map(\.day), ["2026-09-05"], "no phantom January day")
+        let entry = try? XCTUnwrap(report.inbox.days.first?.entries.first)
+        XCTAssertEqual(entry?.text, "notes for\n## 2026-01-15 planning\nmore text", "the entry stays whole")
+        XCTAssertEqual(Inbox.parse(report.inbox.serialized()).allEntries().count, 1, "and round-trips as one entry")
     }
 
     func testDayHeaderKeyRequiresARealDate() {
@@ -575,6 +823,30 @@ final class LedgeCoreTests: XCTestCase {
         XCTAssertTrue(report.repairs.contains("repaired the day header for 2026-09-03"))
     }
 
+    func testDuplicateDayMergeKeepsSameMinuteCapturesFromDifferentDevices() {
+        // fold's dedupe is device-blind, so merging through it deleted a real
+        // capture whenever two devices wrote the same short text in the same
+        // minute. Only byte-identical twins may collapse (review 2026-09-03).
+        let text = """
+        ## 2026-09-03
+        ### 12:30 · iPhone
+        done
+
+        ## 2026-09-03`
+        ### 12:30 · MacBook M4
+        done
+
+        ### 12:30 · iPhone
+        done
+
+        """
+        let report = Inbox.parseReporting(text)
+        XCTAssertEqual(report.inbox.days.count, 1)
+        let entries = report.inbox.days[0].entries
+        XCTAssertEqual(entries.count, 2, "the two devices both survive; the exact twin collapses")
+        XCTAssertEqual(Set(entries.compactMap(\.device)), ["iPhone", "MacBook M4"])
+    }
+
     func testLoadInboxHealsDamagedHeaderOnDisk() throws {
         let store = try makeTempStore()
         try store.writeString("## 2026-09-03`\n### 09:36 · MacBook M4\ndeploy check 0930\n", to: store.inboxURL)
@@ -597,12 +869,15 @@ final class LedgeCoreTests: XCTestCase {
         let beats = store.readHeartbeats()
         XCTAssertEqual(beats.map(\.device), ["iPhone", "MacBook M4"], "newest first")
         XCTAssertEqual(store.heartbeatURL(for: "MacBook M4").lastPathComponent, "heartbeat-macbook-m4.json")
-        // The Mac was last seen 9 hours ago: over the 6 hour threshold, so the phone says so.
-        XCTAssertEqual(LedgeStore.peerLine(from: beats, selfDevice: "iPhone", now: now), "last seen from MacBook M4: 9 hours ago")
+        // The Mac was last seen 9 hours ago: past the silence threshold.
+        XCTAssertEqual(
+            LedgeStore.evaluatePeer(beats: beats, selfDevice: "iPhone", selfDigest: nil, disagreementSince: nil, now: now).line,
+            "last seen from MacBook M4: 9 hours ago"
+        )
         // From the Mac's point of view the phone was seen just now: silent.
-        XCTAssertNil(LedgeStore.peerLine(from: beats, selfDevice: "MacBook M4", now: now))
+        XCTAssertNil(LedgeStore.evaluatePeer(beats: beats, selfDevice: "MacBook M4", selfDigest: nil, disagreementSince: nil, now: now).line)
         // A lone device has no peer to report on.
-        XCTAssertNil(LedgeStore.peerLine(from: beats.filter { $0.device == "iPhone" }, selfDevice: "iPhone", now: now))
+        XCTAssertNil(LedgeStore.evaluatePeer(beats: beats.filter { $0.device == "iPhone" }, selfDevice: "iPhone", selfDigest: nil, disagreementSince: nil, now: now).line)
         // Rewriting the same device replaces, never accumulates.
         try store.writeHeartbeat(device: "iPhone", version: "0.4.2", platform: "iOS", now: now.addingTimeInterval(60))
         XCTAssertEqual(store.readHeartbeats().count, 2)
@@ -627,18 +902,131 @@ final class LedgeCoreTests: XCTestCase {
         XCTAssertEqual(store.readHeartbeats().count, 2)
     }
 
+    func beat(_ device: String, _ at: Date, digest: String?) -> LedgeStore.Heartbeat {
+        LedgeStore.Heartbeat(device: device, at: at, version: "0.4.3", platform: "macOS", inboxDigest: digest)
+    }
+
+    func testDisagreementIsTimedLocallyNotFromPeerAge() {
+        // The 2026-09-03 evening stall: the peer app was alive and stamping
+        // fresh heartbeats, but its bytes never caught up. Deriving the
+        // mismatch duration from the peer's heartbeat age (the first version)
+        // would suppress the warning forever, because the age keeps resetting.
+        let t0 = date("2026-09-03 17:10")
+        let peerFresh = beat("MacBook M4", t0, digest: "aaaaaaaaaaaaaaaa")
+
+        // First observation: mismatch starts the clock, says nothing yet.
+        let first = LedgeStore.evaluatePeer(
+            beats: [peerFresh], selfDevice: "iPhone", selfDigest: "bbbbbbbbbbbbbbbb",
+            disagreementSince: nil, now: t0
+        )
+        XCTAssertNil(first.line)
+        XCTAssertEqual(first.disagreementSince, t0)
+
+        // Five minutes later the peer has stamped again (still stale bytes).
+        // The caller threads back BOTH the date and the key, as the apps do.
+        let t1 = t0.addingTimeInterval(300)
+        let second = LedgeStore.evaluatePeer(
+            beats: [beat("MacBook M4", t1.addingTimeInterval(-30), digest: "aaaaaaaaaaaaaaaa")],
+            selfDevice: "iPhone", selfDigest: "bbbbbbbbbbbbbbbb",
+            disagreementSince: first.disagreementSince,
+            disagreementKey: first.disagreementKey, now: t1
+        )
+        XCTAssertEqual(second.line, "MacBook M4 and this device have shown different inboxes for 5 minutes. iCloud is not delivering.")
+        XCTAssertEqual(second.disagreementSince, t0, "the clock must not restart")
+
+        // Agreement clears it completely.
+        let cleared = LedgeStore.evaluatePeer(
+            beats: [beat("MacBook M4", t1, digest: "bbbbbbbbbbbbbbbb")],
+            selfDevice: "iPhone", selfDigest: "bbbbbbbbbbbbbbbb",
+            disagreementSince: t0, disagreementKey: first.disagreementKey, now: t1
+        )
+        XCTAssertNil(cleared.line)
+        XCTAssertNil(cleared.disagreementSince)
+    }
+
+    func testDisagreementClockIsScopedToTheMismatchItMeasures() {
+        // The clock is persisted in UserDefaults, and the iOS container
+        // survives a reinstall, so a bare date outlives the mismatch it was
+        // timing. A fresh mismatch must not inherit an ancient clock and
+        // instantly claim days of divergence.
+        let now = date("2026-09-03 19:00")
+        let ancient = date("2026-08-30 09:00")
+        let peer = beat("MacBook M4", now.addingTimeInterval(-120), digest: "cccccccccccccccc")
+
+        // A stored clock from a DIFFERENT mismatch is discarded.
+        let stale = LedgeStore.evaluatePeer(
+            beats: [peer], selfDevice: "iPhone", selfDigest: "dddddddddddddddd",
+            disagreementSince: ancient, disagreementKey: "MacBook M4|aaaa|bbbb", now: now
+        )
+        XCTAssertNil(stale.line, "a new mismatch starts a new clock")
+        XCTAssertEqual(stale.disagreementSince, now)
+
+        // A stored clock for THIS mismatch but absurdly old is also discarded.
+        let key = "MacBook M4|cccccccccccccccc|dddddddddddddddd"
+        let tooOld = LedgeStore.evaluatePeer(
+            beats: [peer], selfDevice: "iPhone", selfDigest: "dddddddddddddddd",
+            disagreementSince: ancient, disagreementKey: key, now: now
+        )
+        XCTAssertNil(tooOld.line)
+        XCTAssertEqual(tooOld.disagreementSince, now)
+
+        // The matching, recent clock is kept and reported.
+        let kept = LedgeStore.evaluatePeer(
+            beats: [peer], selfDevice: "iPhone", selfDigest: "dddddddddddddddd",
+            disagreementSince: now.addingTimeInterval(-600), disagreementKey: key, now: now
+        )
+        XCTAssertEqual(kept.line, "MacBook M4 and this device have shown different inboxes for 10 minutes. iCloud is not delivering.")
+        XCTAssertEqual(kept.disagreementKey, key)
+    }
+
+    func testProbeWriteAccessLeavesAHeartbeatAndNoProbeFiles() throws {
+        // The probe used to create and delete a uniquely named file in the
+        // synced folder on every connect and refresh. It is the heartbeat now:
+        // same proof, one file, no create/delete churn.
+        let store = try makeTempStore()
+        try store.probeWriteAccess(device: "iPhone", version: "0.4.4", platform: "iOS")
+        let beats = store.readHeartbeats()
+        XCTAssertEqual(beats.map(\.device), ["iPhone"])
+        let leftovers = try FileManager.default
+            .contentsOfDirectory(atPath: store.stateURL.path)
+            .filter { $0.hasPrefix(".probe-") }
+        XCTAssertEqual(leftovers, [])
+    }
+
+    func testClosedPeerIsSilenceNotDisagreement() {
+        // A phone in a drawer holds old bytes and cannot catch up. That must
+        // never read as "iCloud is not delivering", and must not nag until the
+        // silence threshold. This is the no-badges rule holding the line.
+        let now = date("2026-09-03 19:00")
+        let sleeping = beat("iPhone", now.addingTimeInterval(-45 * 60), digest: "aaaaaaaaaaaaaaaa")
+        let quiet = LedgeStore.evaluatePeer(
+            beats: [sleeping], selfDevice: "MacBook M4", selfDigest: "bbbbbbbbbbbbbbbb",
+            disagreementSince: nil, now: now
+        )
+        XCTAssertNil(quiet.line, "45 minutes of silence with stale bytes is not an alarm")
+        XCTAssertNil(quiet.disagreementSince)
+
+        let gone = LedgeStore.evaluatePeer(
+            beats: [beat("iPhone", now.addingTimeInterval(-3 * 3600), digest: "aaaaaaaaaaaaaaaa")],
+            selfDevice: "MacBook M4", selfDigest: "bbbbbbbbbbbbbbbb",
+            disagreementSince: nil, now: now
+        )
+        XCTAssertEqual(gone.line, "last seen from iPhone: 3 hours ago")
+
+        // A peer with no digest (older build) can never be called disagreeing.
+        let legacy = LedgeStore.evaluatePeer(
+            beats: [beat("iPhone", now.addingTimeInterval(-60), digest: nil)],
+            selfDevice: "MacBook M4", selfDigest: "bbbbbbbbbbbbbbbb",
+            disagreementSince: nil, now: now
+        )
+        XCTAssertNil(legacy.line)
+    }
+
     func testRoughAge() {
         XCTAssertEqual(LedgeFormat.roughAge(5), "just now")
         XCTAssertEqual(LedgeFormat.roughAge(90), "1 minute ago")
         XCTAssertEqual(LedgeFormat.roughAge(4 * 3600 + 10), "4 hours ago")
         XCTAssertEqual(LedgeFormat.roughAge(3 * 86400), "3 days ago")
-    }
-
-    func testProbeWriteAccessSucceedsOnWritableFolder() throws {
-        let store = try makeTempStore()
-        XCTAssertNoThrow(try store.probeWriteAccess())
-        let leftovers = try FileManager.default.contentsOfDirectory(atPath: store.stateURL.path).filter { $0.hasPrefix(".probe-") }
-        XCTAssertEqual(leftovers, [], "the probe cleans up after itself")
     }
 
     func testWellFormedFileReportsNoRepairs() {

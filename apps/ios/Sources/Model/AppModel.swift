@@ -72,6 +72,11 @@ final class AppModel: ObservableObject {
     /// True while refreshNow() is working (spins the toolbar button).
     @Published private(set) var refreshing = false
 
+    /// False when the most recent capture reached no durable store at all.
+    /// The capture bar keeps the text on screen in that case rather than
+    /// clearing the field and showing a checkmark over nothing.
+    @Published private(set) var lastCaptureLanded = true
+
     /// True when a folder bookmark exists (drives setup vs inbox screen).
     @Published private(set) var hasFolder: Bool
 
@@ -155,7 +160,13 @@ final class AppModel: ObservableObject {
     private var scopedRoot: URL?
 
     private func openRoot(_ url: URL) {
-        if let previous = scopedRoot, previous != url {
+        // Release the scope we hold, whatever it is, before adopting this one.
+        // The old `previous != url` guard leaked one access every time the
+        // SAME folder was re-picked or restored after a fault, which is the
+        // common case: the picker and restore() have already started a fresh
+        // access for this URL, so ours is now a duplicate that nobody will
+        // ever balance (independent review, 2026-09-03).
+        if let previous = scopedRoot {
             previous.stopAccessingSecurityScopedResource()
         }
         scopedRoot = url
@@ -166,11 +177,14 @@ final class AppModel: ObservableObject {
             try store.bootstrap()
             // M1: startAccessingSecurityScopedResource() returning true is not
             // proof of anything after a reinstall. Prove the grant by writing.
-            try store.probeWriteAccess()
+            try store.probeWriteAccess(device: Self.deviceName, version: Self.appVersion, platform: "iOS")
             settings = LedgeSettings.load(from: store.settingsURL)
             isConnected = true
             fault = nil
-            writeHeartbeat(force: true)
+            // The probe above WAS the heartbeat write, so record it as such
+            // instead of writing a second copy one line later.
+            lastHeartbeatWrite = Date()
+            lastHeartbeatDigest = store.inboxDigest()
             flushPending()
             refresh()
         } catch {
@@ -200,23 +214,31 @@ final class AppModel: ObservableObject {
         do {
             var loaded = try store.loadInbox()
             let repairs = store.lastLoadRepairs
-            let drained = try store.drainSpool(into: &loaded)
+            let batch = try store.drainSpool(into: &loaded)
+            let drained = batch.added
             let aged = try store.age(&loaded, olderThanDays: settings.agingDays)
             let journaled = reconcileJournal(into: &loaded)
             if drained + aged + journaled > 0 {
                 try store.saveInbox(loaded)
             }
+            // Consume the spool only now that the entries are on disk.
+            try batch.commit()
             folded = drained + journaled
             inbox = loaded
             isConnected = true
-            // Stamp what this device now holds; no-op unless the bytes changed.
-            writeHeartbeat()
             // M6: a read that succeeded on stale bytes is not health. Ask iCloud.
             if let state = store.downloadState(of: store.inboxURL), state.status != .current {
                 fault = .notDownloaded(percent: state.percent)
             } else {
                 fault = nil
             }
+            // Stamp what this device now holds; no-op unless the bytes changed.
+            // ORDER MATTERS: this can fail and set a fault, so it must come
+            // AFTER the clear above. The reverse order cleared the fault this
+            // very call had just set, leaving isConnected false with no card
+            // shown; the 2-second tick then returned forever and the app looked
+            // healthy while permanently frozen (review 2026-09-03).
+            writeHeartbeat()
             // Say what was healed, once; clear it when the next load is clean.
             if !repairs.isEmpty {
                 notice = "Repaired the inbox file: " + repairs.joined(separator: "; ") + "."
@@ -257,7 +279,7 @@ final class AppModel: ObservableObject {
         // Re-probe the grant on every explicit refresh: it is the one moment
         // the user is looking, and the probe is a 0-byte write.
         do {
-            try store.probeWriteAccess()
+            try store.probeWriteAccess(device: Self.deviceName, version: Self.appVersion, platform: "iOS")
         } catch {
             isConnected = false
             fault = .grantDead
@@ -266,15 +288,22 @@ final class AppModel: ObservableObject {
             return
         }
 
-        // Download with a real timeout, off the main actor.
-        let inboxURL = store.inboxURL
+        // Download with a real timeout, off the main actor. A fresh store is
+        // built inside the task: handing the model's own LedgeStore to a
+        // detached task shares mutable, non-Sendable state with the 2-second
+        // heartbeat timer on the main actor, which Swift 5 mode hides rather
+        // than rejects (independent review, 2026-09-03). Only the root URL
+        // crosses the boundary, and read-stamp state is per-instance anyway.
+        let root = store.root
         let state = await Task.detached(priority: .userInitiated) {
-            store.downloadAndWait(inboxURL, timeout: 30)
+            let probe = LedgeStore(root: root)
+            return probe.downloadAndWait(probe.inboxURL, timeout: 30)
         }.value
 
         flushPending()
         let folded = refresh()
         writeHeartbeat(force: true)
+        updatePeerLine()
 
         if let state, state.status != .current {
             fault = .notDownloaded(percent: state.percent)
@@ -285,9 +314,26 @@ final class AppModel: ObservableObject {
             refreshOutcome = folded == 1 ? "1 capture folded in." : "\(folded) captures folded in."
         } else if !store.lastLoadRepairs.isEmpty {
             refreshOutcome = "Repaired: " + store.lastLoadRepairs.joined(separator: "; ") + "."
+        } else if let disagreement = peerLine {
+            // "Up to date" used to mean "my own copy downloaded cleanly",
+            // which is true and useless while the other device holds
+            // different bytes. Report the disagreement instead (2026-09-03).
+            refreshOutcome = disagreement
         } else {
-            let elapsed = Date().timeIntervalSince(started)
-            refreshOutcome = elapsed < 1.5 ? "Up to date, just now." : "Up to date, checked in \(Int(elapsed.rounded())) s."
+            if let peer = agreeingPeer() {
+                // Claim agreement only from evidence, and date the evidence
+                // rather than implying it is live.
+                refreshOutcome = peer.age < 90
+                    ? "In sync with " + peer.device + "."
+                    : "In sync with " + peer.device + " as of " + LedgeFormat.roughAge(peer.age) + "."
+            } else {
+                // Honest wording: this device's own copy downloaded cleanly.
+                // It says nothing about the other device (review 2026-09-03).
+                let elapsed = Date().timeIntervalSince(started)
+                refreshOutcome = elapsed < 1.5
+                    ? "Local copy checked, nothing new."
+                    : "Local copy checked in \(Int(elapsed.rounded())) s, nothing new."
+            }
         }
         scheduleOutcomeClear()
     }
@@ -362,34 +408,112 @@ final class AppModel: ObservableObject {
     private var lastHeartbeatWrite: Date = .distantPast
     private var lastHeartbeatDigest: String?
 
+    /// How often a heartbeat may be rewritten with unchanged content while the
+    /// app is on screen. Two minutes, and ONLY while foregrounded, so the
+    /// disagreement check has a live peer to compare against when the user is
+    /// actually present.
+    ///
+    /// This used to be every 5 minutes unconditionally, which turned an idle
+    /// folder into a permanent iCloud writer: 12 uploads an hour, forever,
+    /// from a folder that previously changed only when a thought was captured
+    /// (bird's upload count went from about 14 an hour to 24, then 38 as the
+    /// phone joined in). Churn on a synced folder is not free, and monitoring
+    /// that degrades the thing it monitors is worse than no monitoring.
+    private static let foregroundKeepalive: TimeInterval = 120
+
     /// Write this device's heartbeat: on launch, on activation, on capture,
-    /// whenever the inbox bytes it holds have changed, and otherwise at most
-    /// every five minutes while foregrounded. The digest is what lets another
-    /// device (or deploy.sh) prove this one is looking at the same inbox.
+    /// and whenever the inbox bytes it holds have changed. While the app is on
+    /// screen it also refreshes at `foregroundKeepalive`; while it is not, it
+    /// writes only on real change. The digest is what lets another device
+    /// prove this one is looking at the same inbox.
     /// A failed write is a real signal and surfaces through the fault path.
-    private func writeHeartbeat(force: Bool = false) {
+    private func writeHeartbeat(force: Bool = false, keepalive: Bool = false) {
         guard let store, isConnected else { return }
         let now = Date()
         let digest = store.inboxDigest()
-        let due = now.timeIntervalSince(lastHeartbeatWrite) >= 300
+        let due = keepalive && now.timeIntervalSince(lastHeartbeatWrite) >= Self.foregroundKeepalive
         guard force || due || digest != lastHeartbeatDigest else { return }
         do {
             try store.writeHeartbeat(device: Self.deviceName, version: Self.appVersion, platform: "iOS", now: now)
             lastHeartbeatWrite = now
             lastHeartbeatDigest = digest
         } catch {
+            // assumeGrant: false. This runs from the keepalive tick, where a
+            // momentary iCloud write failure is ordinary. Mapping that to
+            // "your folder access ended, re-pick it" put a blocking card in
+            // front of the user for a folder that was fine, which is the
+            // failure mode this whole feature was built to remove
+            // (review 2026-09-03).
             isConnected = false
-            fault = classify(error, assumeGrant: true)
+            fault = classify(error, assumeGrant: false)
         }
     }
+
+    /// When the current digest mismatch was first observed on this device.
+    /// Persisted, because it is a local observation and must survive a
+    /// relaunch: deriving it from the peer's heartbeat age was wrong.
+    private static let disagreementSinceKey = "ledge.disagreementSince"
+    private static let disagreementIdentityKey = "ledge.disagreementKey"
 
     private func updatePeerLine() {
         guard let store, isConnected else {
             if peerLine != nil { peerLine = nil }
             return
         }
-        let line = LedgeStore.peerLine(from: store.readHeartbeats(), selfDevice: Self.deviceName)
-        if line != peerLine { peerLine = line }
+        let defaults = UserDefaults.standard
+        let health = LedgeStore.evaluatePeer(
+            beats: store.readHeartbeats(),
+            selfDevice: Self.deviceName,
+            selfDigest: store.inboxDigest(),
+            disagreementSince: defaults.object(forKey: Self.disagreementSinceKey) as? Date,
+            disagreementKey: defaults.string(forKey: Self.disagreementIdentityKey)
+        )
+        if let since = health.disagreementSince, let key = health.disagreementKey {
+            defaults.set(since, forKey: Self.disagreementSinceKey)
+            defaults.set(key, forKey: Self.disagreementIdentityKey)
+        } else {
+            defaults.removeObject(forKey: Self.disagreementSinceKey)
+            defaults.removeObject(forKey: Self.disagreementIdentityKey)
+        }
+        // Count it, do not just show it. A warning that vanishes on recovery
+        // leaves the next roadmap decision resting on memory again.
+        let peerName = store.readHeartbeats().first { $0.device != Self.deviceName }?.device
+        if health.line != nil, let since = health.disagreementSince {
+            store.noteIncident(SyncIncident(
+                kind: .disagreement,
+                observer: Self.deviceName,
+                startedAt: since,
+                endedAt: nil,
+                peer: peerName,
+                version: Self.appVersion,
+                secondsAfterInstall: store.secondsSinceLastInstall(now: since)
+            ))
+        } else if health.disagreementSince == nil {
+            store.closeIncident(kind: .disagreement, observer: Self.deviceName, peer: peerName)
+        }
+        if health.line != peerLine { peerLine = health.line }
+    }
+
+    /// A peer that reports the same inbox bytes we hold, and how long ago it
+    /// said so. Nil when no peer agrees within the live window.
+    ///
+    /// The bound was 2 minutes, which no peer could meet: the Mac stamps every
+    /// 10 minutes at best, so this returned nil essentially always and the
+    /// user only ever saw the vaguer local wording. 15 minutes matches the
+    /// window the disagreement check uses, and the caller states the age
+    /// rather than implying "now" (review 2026-09-03).
+    private func agreeingPeer() -> (device: String, age: TimeInterval)? {
+        guard let store else { return nil }
+        let digest = store.inboxDigest()
+        guard digest != nil else { return nil }
+        let now = Date()
+        guard let peer = store.readHeartbeats().first(where: { beat in
+            beat.device != Self.deviceName
+                && now.timeIntervalSince(beat.at) <= 15 * 60
+                && beat.inboxDigest != nil
+                && beat.inboxDigest == digest
+        }) else { return nil }
+        return (peer.device, now.timeIntervalSince(peer.at))
     }
 
     // MARK: Capture
@@ -400,6 +524,7 @@ final class AppModel: ObservableObject {
         let trimmed = LedgeFormat.trimEdges(text)
         guard !trimmed.isEmpty else { return }
         let now = Date()
+        lastCaptureLanded = true
         guard let store, isConnected else {
             queueWhenDisconnected(text: trimmed, at: now)
             return
@@ -412,8 +537,11 @@ final class AppModel: ObservableObject {
             journalAdd(text: trimmed, at: now)
             writeHeartbeat(force: true)
         } catch {
-            SpoolWriter.appendToPending(Spool.line(for: trimmed, at: now, device: Self.deviceName))
-            notice = "Captured to the local queue. Ledge will file it when the folder is reachable."
+            let landing = SpoolWriter.appendToPending(Spool.line(for: trimmed, at: now, device: Self.deviceName))
+            lastCaptureLanded = landing != .failed
+            notice = landing == .failed
+                ? "That capture could not be written anywhere. Copy the text somewhere safe before closing Ledge."
+                : "Captured to the local queue. Ledge will file it when the folder is reachable."
             fault = classify(error, assumeGrant: false)
             updateWaitingLine()
         }
@@ -423,23 +551,28 @@ final class AppModel: ObservableObject {
     func queueWhenDisconnected(text: String, at date: Date = Date()) {
         let trimmed = LedgeFormat.trimEdges(text)
         guard !trimmed.isEmpty else { return }
-        SpoolWriter.appendToPending(Spool.line(for: trimmed, at: date, device: Self.deviceName))
-        notice = "Captured. Ledge will file it once your folder is connected."
+        let landing = SpoolWriter.appendToPending(Spool.line(for: trimmed, at: date, device: Self.deviceName))
+        lastCaptureLanded = landing != .failed
+        notice = landing == .failed
+            ? "That capture could not be written anywhere. Copy the text somewhere safe before closing Ledge."
+            : "Captured. Ledge will file it once your folder is connected."
         updateWaitingLine()
     }
 
-    /// Move locally queued captures into the real spool, then clear the queue.
+    /// Move locally queued captures into the real spool, then retire exactly
+    /// the bytes that made it. The old shape read the spool, rewrote the whole
+    /// file with the queue appended, and then deleted the queue outright: a
+    /// capture appended to either file mid-flush was destroyed by one of the
+    /// two whole-file writes (review 2026-09-03).
     func flushPending() {
         guard let store, isConnected else { return }
         guard let pending = SpoolWriter.pendingContents() else { return }
         do {
-            let existing = (try store.readString(store.spoolURL)) ?? ""
-            var combined = existing
-            if !combined.isEmpty && !combined.hasSuffix("\n") { combined += "\n" }
-            combined += pending
-            if !combined.hasSuffix("\n") { combined += "\n" }
-            try store.writeStringInPlace(combined, to: store.spoolURL)
-            SpoolWriter.clearPending()
+            for line in pending.components(separatedBy: "\n")
+            where !LedgeFormat.trimEdges(line).isEmpty {
+                try store.appendSpoolLine(line)
+            }
+            try SpoolWriter.consumePending(pending)
         } catch {
             // The waiting line keeps counting these; a transient notice here
             // was wiped by the next refresh two seconds later (brief, item 11).
@@ -491,7 +624,10 @@ final class AppModel: ObservableObject {
             refresh()
             return
         }
-        writeHeartbeat()
+        // Foreground keepalive: the app is on screen, so a bounded refresh
+        // here is what gives the peer a live stamp to disagree with.
+        writeHeartbeat(keepalive: true)
+        updatePeerLine()
         if raw == lastSeenDiskRaw && LedgeFormat.trimEdges(spool).isEmpty {
             updateWaitingLine(spoolRaw: spool)
             // Cheap and honest: even when bytes did not change, iCloud may
