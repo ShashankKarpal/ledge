@@ -257,6 +257,9 @@ await_agreement() {   # label max_age device
     return 1
 }
 
+# Cross-device freshness. ONLY safe for the Mac checking its own app, where
+# the heartbeat and the comparison clock come from the same machine. Never use
+# it for the phone: see the note in verify_phone about clock skew.
 await_heartbeat() {   # platform since_epoch label want_digest [device]
     local platform="$1" since="$2" label="$3" want_digest="${4:-0}"
     local DEVICE_FILTER="${5:-}"
@@ -351,18 +354,26 @@ verify_phone() {
         warn "devicectl cannot list the app container on this OS; skipping that check"
     fi
 
-    # Assertion 1: the phone is alive and its writes reach this Mac.
+    # Assertion 1: the phone is alive, running the build we just made, and its
+    # writes reach this Mac.
     #
-    # After an INSTALL the right question is "did a heartbeat from the new
-    # build appear after the install", because installing genuinely produces
-    # one. In verify mode nothing was installed, so demanding a write after an
-    # arbitrary instant is the wrong question again: an idle phone stamps every
-    # 120 seconds and the check becomes a coin flip. Ask for agreement instead.
-    if [ "$TARGET" = "verify" ]; then
-        if ! await_agreement "iPhone" 240 "iPhone"; then
-            VERIFY_FAILED=1
-        fi
-    elif ! await_heartbeat iOS "$IOS_INSTALL_EPOCH" "iPhone" 0 "iPhone"; then
+    # NEVER COMPARE A TIMESTAMP FROM ONE DEVICE AGAINST A CLOCK ON ANOTHER.
+    # That mistake produced four false failures in two days. The heartbeat's
+    # `at` field is written by the phone, from the phone's clock; every
+    # "install began" or "check started" value comes from the Mac's clock. A
+    # few seconds of ordinary skew between two devices makes any strict
+    # ordering between them meaningless, and no amount of reordering the
+    # script fixes it (2026-09-04, the fourth instance).
+    #
+    # What actually proves the thing we care about, using only values that
+    # come from the same source:
+    #   - the heartbeat carries BUILD_VERSION, which proves the new build ran
+    #     and wrote (the version is baked into the binary, not timed);
+    #   - its inbox digest equals this Mac's digest, which proves the bytes
+    #     agree right now, computed on the Mac from the Mac's own copy;
+    #   - its age is merely sanity-checked against a generous window, so an
+    #     ancient stamp cannot pass.
+    if ! await_agreement "iPhone" 600 "iPhone"; then
         VERIFY_FAILED=1
     fi
 
@@ -388,7 +399,10 @@ verify_phone() {
     # Assertion 3: Mac -> phone. The phone's heartbeat must report the digest
     # of the inbox this Mac now holds (which contains the probe). That is the
     # phone holding the Mac's bytes, whoever folded them.
-    if ! await_heartbeat iOS "$IOS_INSTALL_EPOCH" "iPhone" 1 "iPhone"; then
+    # Same rule: agreement, computed from values that share a source. This one
+    # is the real Mac to phone proof, because folding the probe CHANGED this
+    # Mac's inbox digest, so the phone can only match by having received it.
+    if ! await_agreement "iPhone" 600 "iPhone"; then
         VERIFY_FAILED=1
         return
     fi

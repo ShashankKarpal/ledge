@@ -18,6 +18,27 @@ All notable changes to Ledge. History before v0.4.0 was not tracked in this file
 
 ## Unreleased
 
+### Deploy verification: never compare clocks across devices
+
+Four false failures in two days all came from one mistake, and reordering the
+script never fixed it because the mistake was conceptual. The heartbeat's
+timestamp is written by the phone from the phone's clock. Every "install
+began" or "check started" value is read on the Mac from the Mac's clock. A few
+seconds of ordinary skew between two devices makes any strict ordering between
+them meaningless. The last run showed it plainly: a phone heartbeat at
+10:15:52 against an install the Mac timed at 10:15:55, with the digests
+identical.
+
+Every phone assertion now uses `await_agreement`, which compares only values
+that share a source: the heartbeat carries the built version (baked into the
+binary, not timed), its inbox digest is compared against the Mac's own digest
+of its own file, and the age is sanity-checked against a generous window so an
+ancient stamp still cannot pass. `await_heartbeat` survives for the Mac
+checking its own app, where both values come from the same machine, and now
+carries a comment saying it must never be used across devices.
+
+No app code changed, so installed builds are unaffected.
+
 ### v0.5.1: the capture log
 
 The last line of defence, and the thing both independent reviews ranked as the
