@@ -22,6 +22,14 @@ jobs:
       - name: Run unit tests
         run: swift test --package-path core
 
+  core-platforms:
+    name: LedgeCore typechecks for watchOS, iOS and macOS
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+      - name: Typecheck against every SDK the core ships in
+        run: bash scripts/check-core-platforms.sh
+
   mac-build:
     name: Mac app builds
     runs-on: macos-14

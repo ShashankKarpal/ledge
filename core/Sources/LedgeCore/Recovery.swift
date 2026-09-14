@@ -232,7 +232,9 @@ public struct RecoveryReport: Equatable {
     /// `/Users/name/Library/...` becomes `~/Library/...`. The report is meant
     /// to be pasted places; an account name is not part of a sync diagnosis.
     public static func abbreviateHome(_ path: String) -> String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        // NSHomeDirectory, not FileManager.homeDirectoryForCurrentUser: the
+        // latter does not exist on watchOS and LedgeCore compiles there.
+        let home = NSHomeDirectory()
         if path == home { return "~" }
         if path.hasPrefix(home + "/") { return "~" + path.dropFirst(home.count) }
         return path

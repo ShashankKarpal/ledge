@@ -121,8 +121,9 @@ final class RecoveryTests: XCTestCase {
     }
 
     func testAbbreviateHome() {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let home = NSHomeDirectory()
         XCTAssertEqual(RecoveryReport.abbreviateHome(home + "/Documents/Ledge"), "~/Documents/Ledge")
+        XCTAssertEqual(RecoveryReport.abbreviateHome(home), "~")
         XCTAssertEqual(RecoveryReport.abbreviateHome("/Volumes/Other/Ledge"), "/Volumes/Other/Ledge")
     }
 
