@@ -18,6 +18,34 @@ All notable changes to Ledge. History before v0.4.0 was not tracked in this file
 
 ## Unreleased
 
+### Merge as edit: one thought edited twice is one entry
+
+The file format identifies an entry by day, minute and device, and every
+merge used to treat a same-minute, same-device entry with different text as
+a second entry. Ticking a checkbox on one device while another held a stale
+copy resurrected the unticked twin on that device's next save (the
+"completed loops reappear" bug, audit 2026-09-02 L-B3), and a fixed typo
+became two entries.
+
+- A new `EditPolicy` on `Inbox.fold`. RELATED texts (equal after normalising
+  checkbox marks, one a prefix of the other, sharing at least half their
+  lines, or sharing a 60 percent common prefix) collapse into one entry.
+  Anything else stays two entries: two Siri captures in one minute are two
+  thoughts, and a same-minute entry from a DIFFERENT device is never merged,
+  which keeps the 0.5.0 fix for the device-blind merge intact.
+- Checkboxes are unioned whichever side wins: a box ticked on either side
+  stays ticked. A completion is never undone by a merge.
+- Direction is the caller's decision: `saveInbox` merging our newer state
+  onto changed disk bytes prefers the incoming text; folding an iCloud
+  conflict version (the loser of a race, older by construction) prefers the
+  existing text; the Mac editor's recovery journal (an unsaved edit) prefers
+  the incoming text; spool drains keep both, always, because captures are
+  not edits.
+
+Nine tests, including the two cross-device scenarios end to end through
+`saveInbox`: a completed loop survives a stale device's save as exactly one
+ticked entry, and a typo fix lands as one entry. 93 tests.
+
 ### Save on quit for SIGTERM, and a journal that no longer waits for a failure (Mac)
 
 Two gaps in the editor's last line of defence, found by reading the quit

@@ -161,10 +161,13 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
             var recovered = 0
             if let text = Self.pendingRecoveryText() {
                 let lost = Inbox.parse(text)
+                // The journal holds the NEWER text of anything it shares
+                // with the inbox (it is the copy of an unsaved edit), so a
+                // related same-minute twin is replaced rather than doubled.
                 for item in lost.allEntries().reversed() where !item.entry.text.isEmpty {
                     recovered += inbox.fold([(date: item.entry.timestamp,
                                               text: item.entry.text,
-                                              device: item.entry.device)])
+                                              device: item.entry.device)], policy: .incomingWins)
                 }
                 if recovered > 0 {
                     try store.saveInbox(inbox)

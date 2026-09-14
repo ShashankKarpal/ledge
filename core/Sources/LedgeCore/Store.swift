@@ -222,8 +222,11 @@ public final class LedgeStore {
             // (review 2026-09-03).
             guard let content = try? String(contentsOf: version.url, encoding: .utf8) else { continue }
             let lost = Inbox.parse(content)
+            // The conflict version lost a race, so it is the older state:
+            // the current text wins for a related twin, but a box ticked in
+            // the lost version stays ticked (merge as edit, 2026-09-14).
             for item in lost.allEntries().reversed() {
-                folded += inbox.fold([(date: item.entry.timestamp, text: item.entry.text, device: item.entry.device)])
+                folded += inbox.fold([(date: item.entry.timestamp, text: item.entry.text, device: item.entry.device)], policy: .existingWins)
             }
             pendingConflictVersions.append(version)
         }
@@ -264,8 +267,13 @@ public final class LedgeStore {
                         throw LedgeStoreError.notDownloaded(self.inboxURL)
                     }
                     var merged = Inbox.parse(LedgeFormat.strippingNulls(diskRaw))
+                    // Our entries are the newer state of anything we edited,
+                    // so a related same-minute, same-device twin on disk is
+                    // replaced by ours, with ticked boxes from both sides kept
+                    // (merge as edit, 2026-09-14). Unrelated texts stay two
+                    // entries, as before.
                     for item in outgoing.allEntries().reversed() {
-                        _ = merged.fold([(date: item.entry.timestamp, text: item.entry.text, device: item.entry.device)])
+                        _ = merged.fold([(date: item.entry.timestamp, text: item.entry.text, device: item.entry.device)], policy: .incomingWins)
                     }
                     // Entries are not the only content. The Mac editor is a raw
                     // text view over the whole file, so anything typed above the
@@ -299,7 +307,7 @@ public final class LedgeStore {
             }
             var merged = Inbox.parse(LedgeFormat.strippingNulls(diskRaw))
             for item in outgoing.allEntries().reversed() {
-                _ = merged.fold([(date: item.entry.timestamp, text: item.entry.text, device: item.entry.device)])
+                _ = merged.fold([(date: item.entry.timestamp, text: item.entry.text, device: item.entry.device)], policy: .incomingWins)
             }
             outgoing = merged
         }

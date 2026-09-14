@@ -247,16 +247,45 @@ public struct Inbox: Equatable {
 
     @discardableResult
     public mutating func fold(_ captures: [(date: Date, text: String, device: String?)]) -> Int {
+        fold(captures, policy: .keepBoth)
+    }
+
+    /// Fold with a merge-as-edit policy. `keepBoth` is the historical rule:
+    /// a same-minute entry with different text is a second entry. The two
+    /// edit policies collapse a same-minute, same-device entry whose text is
+    /// RELATED (see EditMerge) into one, keeping the preferred side's words
+    /// and every ticked checkbox from either side. Unrelated texts stay two
+    /// entries under every policy: captures are never merged away.
+    /// Returns entries added (an edit applied in place counts as zero).
+    @discardableResult
+    public mutating func fold(_ captures: [(date: Date, text: String, device: String?)], policy: EditPolicy) -> Int {
         var added = 0
         for capture in captures {
             let text = LedgeFormat.trimEdges(capture.text)
             if text.isEmpty { continue }
             let dayKey = LedgeFormat.dayFormatter.string(from: capture.date)
             let minute = LedgeFormat.timeFormatter.string(from: capture.date)
-            if let dayIndex = days.firstIndex(where: { $0.day == dayKey }),
-               days[dayIndex].entries.contains(where: {
-                   $0.text == text && LedgeFormat.timeFormatter.string(from: $0.timestamp) == minute
+            guard let dayIndex = days.firstIndex(where: { $0.day == dayKey }) else {
+                prepend(text: text, at: capture.date, device: capture.device)
+                added += 1
+                continue
+            }
+            let sameMinute = days[dayIndex].entries.indices.filter {
+                LedgeFormat.timeFormatter.string(from: days[dayIndex].entries[$0].timestamp) == minute
+            }
+            if sameMinute.contains(where: { days[dayIndex].entries[$0].text == text }) {
+                continue
+            }
+            if policy != .keepBoth,
+               let index = sameMinute.first(where: {
+                   let existing = days[dayIndex].entries[$0]
+                   return (existing.device ?? "") == (capture.device ?? "")
+                       && EditMerge.areRelated(existing.text, text)
                }) {
+                let existing = days[dayIndex].entries[index].text
+                days[dayIndex].entries[index].text = policy == .incomingWins
+                    ? EditMerge.merged(preferred: text, other: existing)
+                    : EditMerge.merged(preferred: existing, other: text)
                 continue
             }
             prepend(text: text, at: capture.date, device: capture.device)
