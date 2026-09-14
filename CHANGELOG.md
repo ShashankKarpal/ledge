@@ -16,7 +16,21 @@ All notable changes to Ledge. History before v0.4.0 was not tracked in this file
 - `project.yml` reads `DEVELOPMENT_TEAM` from the `LEDGE_DEVELOPMENT_TEAM` environment variable (a gitignored `.env`); set your own when building from source.
 - Mac bundle id corrected from the `com.example` placeholder.
 
-## Unreleased
+## v0.5.2
+
+The first notarized Mac download since v0.4.1. It carries everything below,
+including the 0.5.0 and 0.5.1 capture-durability work that until now had only
+ever been installed straight from source. Release hygiene landed with it:
+`scripts/notarize.sh` builds, signs, notarizes, staples and proves the zip
+from a clean checkout; `docs/UNINSTALL.md`; issue templates that ask for the
+Recovery report instead of your notes; `docs/TOUR-STORYBOARD.md` and
+`scripts/make-tour-gif.sh` for the README tour; a Homebrew cask in the
+`shashankkarpal/tap` personal tap (`brew install --cask shashankkarpal/tap/ledge`).
+
+`Ledge-v0.5.2-macOS.zip` SHA-256:
+`e3a7ea9a023ba81403103cf81d365b613da7992e89b180cf7bf490d128f1aa76`
+(notarization accepted by Apple 2026-09-14, stapled, `spctl` says
+`source=Notarized Developer ID`).
 
 ### Merge as edit: one thought edited twice is one entry
 

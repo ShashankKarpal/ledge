@@ -12,11 +12,18 @@
 
 <p align="center">
   <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20iOS%20%C2%B7%20watchOS-99612F?style=flat-square">
-  <img alt="Status" src="https://img.shields.io/badge/status-v0.4.1-99612F?style=flat-square">
+  <img alt="Status" src="https://img.shields.io/badge/status-v0.5.2-99612F?style=flat-square">
   <img alt="Local only" src="https://img.shields.io/badge/local-only-99612F?style=flat-square">
   <img alt="Stack" src="https://img.shields.io/badge/built%20with-Swift-1A1917?style=flat-square">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-1A1917?style=flat-square"></a>
 </p>
+
+<!-- TOUR: the 30-second GIF goes here. Record per docs/TOUR-STORYBOARD.md,
+     run ./scripts/make-tour-gif.sh, then replace this comment with:
+<p align="center">
+  <img alt="Thirty seconds of Ledge: summon, type, Esc, Open Loops, capture from the phone, search" src="design/tour/ledge-tour.gif" width="900">
+</p>
+-->
 
 ## What it does
 
@@ -81,6 +88,7 @@
 ### Capture
 
 - **Option+Space anywhere.** Non-activating panel, so the app you were in keeps focus.
+- **Dictate with whatever you already use.** Ledge has no speech code of its own, on purpose. Option+Space, then your system dictation key (Option+D with Spokenly, for example) puts the final text straight into the entry. Nothing to grant, nothing to record.
 - **Timestamped by default.** Day heading and time heading written automatically, newest first.
 - **Esc tucks away.** Autosaves, and removes an untouched empty entry.
 - **Siri capture.** "Capture my thought in Ledge", "Capture to Ledge", or "Add to Ledge". Invoking without text prompts "What's the thought".
@@ -115,6 +123,7 @@
 - **No lock-in.** Any Markdown editor reads and writes these files.
 - **Disposable index.** `.ledge/` holds search index and settings; delete it any time and it rebuilds.
 - **Self-healing.** Inbox writes happen under file coordination, and every load detects and repairs corruption automatically.
+- **Three safety nets under every capture, plus a window to see them.** A per-device write-ahead capture log and the Mac editor's recovery journal live outside iCloud; the Mac also keeps dated, verified, bounded backups of `inbox.md` there. Right-click the menu bar glyph and choose Recovery to see folder state, every device's heartbeat, what is waiting in the spool, anything unaccounted for, the last 30 days of sync incidents, and the backups. Its diagnostic report never contains your text.
 
 ## Stack
 
@@ -140,15 +149,24 @@ Apple platforms only, by design. Ledge is Swift and SwiftUI end to end, and it s
 
 ### Mac, no tools needed
 
-Download `Ledge-v0.4.1-macOS.zip` from [Releases](https://github.com/ShashankKarpal/ledge/releases/latest), unzip, and move `Ledge.app` to `/Applications`. Signed with an Apple Developer ID and notarized by Apple, so it opens without Gatekeeper warnings. Requires macOS 13 or later.
+Download `Ledge-v0.5.2-macOS.zip` from [Releases](https://github.com/ShashankKarpal/ledge/releases/latest), unzip, and move `Ledge.app` to `/Applications`. Signed with an Apple Developer ID and notarized by Apple, so it opens without Gatekeeper warnings. Requires macOS 13 or later.
 
 Verify it yourself:
 
-    ditto -x -k Ledge-v0.4.1-macOS.zip .
+    ditto -x -k Ledge-v0.5.2-macOS.zip .
     xcrun stapler validate Ledge.app
     spctl -a -vvv Ledge.app
 
-Expect `source=Notarized Developer ID`.
+Expect `source=Notarized Developer ID`. The release notes carry the zip's
+SHA-256; `shasum -a 256` on your download should print the same value.
+
+Or with Homebrew, which checks that same SHA-256 for you:
+
+    brew install --cask shashankkarpal/tap/ledge
+
+The release is built by `./scripts/notarize.sh` from a clean checkout, so
+anyone with a Developer ID can reproduce it. To uninstall, see
+[docs/UNINSTALL.md](docs/UNINSTALL.md); your notes are never touched.
 
 ### Mac, build from source
 
@@ -193,7 +211,7 @@ apps/ios/       iPhone and iPad app, the watchOS relay, and the widgets
 shortcuts/      capture trigger setup (intent-first) and the zero-app fallback recipe
 design/         brand assets, tokens, screenshots, BRAND.md
 docs/           architecture spec and the file-format contract
-scripts/        build, deploy, and the seven-day gate
+scripts/        build, deploy, notarize, the README tour converter, and the seven-day gate
 ```
 
 ## Roadmap
@@ -206,7 +224,8 @@ scripts/        build, deploy, and the seven-day gate
 | v0.3.2 | Notarized download matching the source, Edit menu so paste and copy work on the Mac | Shipped |
 | v0.4 | Paste as Markdown, the Morning Ledge daily digest, a Settings window | Shipped |
 | v0.4.x | Capture trust: the watch relay never loses or duplicates a capture, the inbox self-heals, single-source version stamping in CI, the seven-day gate | Shipped |
-| v0.5 | Gentle one-shot reminders handed to Apple Reminders, an iOS Share Sheet extension | Gated |
+| v0.5.x | Capture durability: write-ahead capture log, editor recovery journal, incident log, deploy verification, Recovery window, local backups outside iCloud, merge-as-edit, save on SIGTERM. Reminders handoff shipped on iOS (entry context menu). | Shipped |
+| v0.5 gate | Reminders handoff on the Mac. The iOS Share Sheet extension is killed (the Capture to Ledge Shortcut already covers the share sheet). | Gated |
 | v0.6 | Optional local AI adapter (LM Studio, off by default) for inbox summaries and stale-loop surfacing, end-of-day sweep | Planned |
 | Later | TestFlight beta, inline images, focus mode, App Store release | Planned |
 
