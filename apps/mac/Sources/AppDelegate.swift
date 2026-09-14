@@ -98,6 +98,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let interval: TimeInterval = peerActive ? 600 : 3600
         let due = now.timeIntervalSince(lastHeartbeatWrite) >= interval
+        // Local backup rides the same change detection: the digest is already
+        // in hand, and a snapshot is only ever taken when it differs from the
+        // newest one on disk. Nothing here touches the synced folder.
+        backupIfChanged(digest: digest, now: now)
         guard force || due || digest != lastHeartbeatDigest else { return }
         do {
             try store.writeHeartbeat(
@@ -282,6 +286,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindow?.window?.makeKeyAndOrderFront(nil)
     }
 
+    // MARK: Local backups (outside iCloud, 2026-09-14)
+
+    /// Dated, verified, bounded copies of the files that matter, on this
+    /// Mac's own disk. iCloud is sync, not backup: a bad merge reaches every
+    /// device in seconds, and these are where the previous bytes still are.
+    static let backups = LocalBackups(root: LocalBackups.defaultRoot())
+
+    private var lastBackupDigest: String?
+    private var lastBackupPrune: Date = .distantPast
+
+    /// Called with the inbox digest the heartbeat writer already computed, so
+    /// this costs nothing extra until the bytes actually change. Attic month
+    /// files are checked at the same moments (aging moves entries there, and
+    /// a bad move would be invisible without a copy).
+    private func backupIfChanged(digest: String?, now: Date) {
+        guard let digest, digest != lastBackupDigest else { return }
+        lastBackupDigest = digest
+        do {
+            if let made = try Self.backups.snapshot(store.inboxURL, name: "inbox", now: now) {
+                NSLog("Ledge: backup written \(made.url.lastPathComponent)")
+            }
+            if let months = try? store.atticMonthURLs() {
+                for url in months {
+                    let name = "attic-" + url.deletingPathExtension().lastPathComponent
+                    if let made = try Self.backups.snapshot(url, name: name, now: now) {
+                        NSLog("Ledge: backup written \(made.url.lastPathComponent)")
+                    }
+                }
+            }
+        } catch {
+            NSLog("Ledge: backup not written: \(error.localizedDescription)")
+        }
+        // Prune at most once a day; it only ever removes what the tiers say.
+        if now.timeIntervalSince(lastBackupPrune) >= 86400 {
+            lastBackupPrune = now
+            let removed = Self.backups.prune(now: now)
+            if removed > 0 { NSLog("Ledge: backups pruned \(removed)") }
+        }
+    }
+
     // MARK: Recovery (observational first, 2026-09-14)
 
     /// The local folder outside iCloud that holds this Mac's safety copies:
@@ -299,7 +343,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             store: store,
             captureLog: Self.captureLog,
             editorJournalURL: PanelContentViewController.recoveryJournalURL,
-            backups: nil,
+            backups: Self.backups.status(),
             selfDevice: PanelContentViewController.deviceLabel,
             appVersion: Self.appVersion,
             platform: "macOS",

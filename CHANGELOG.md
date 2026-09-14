@@ -18,6 +18,35 @@ All notable changes to Ledge. History before v0.4.0 was not tracked in this file
 
 ## Unreleased
 
+### Local versioned backups outside iCloud (Mac)
+
+iCloud is sync, not backup: a bad merge or a stray delete reaches every
+device within seconds. The Mac app now keeps dated copies of `inbox.md` and
+every attic month file in `~/Library/Application Support/Ledge/backups/`, a
+folder iCloud never touches and no repo ever holds.
+
+- Change-driven, never on a timer: a copy is written only when the file's
+  bytes differ from the newest copy, detected from the digest the heartbeat
+  writer already computes. Identical bytes are never stored twice.
+- Verified before it counts: written to a temporary name, read back, digested
+  and compared, then renamed into place and recorded in an append-only
+  `manifest.jsonl`. A copy that cannot be proven is deleted, not kept.
+- Bounded: everything from the last 48 hours, then the newest per day for 30
+  days, then the newest per week for six months, then nothing, plus a 200 MB
+  hard cap that evicts oldest first. Pruning runs at most once a day and
+  never removes the newest copy of any file.
+- Names carry a UTC stamp (`inbox-20260914T113653Z-<digest>.md`) so ordering
+  survives a time zone change on the machine.
+- The Recovery screen shows the count, the newest copy's age and the disk
+  used; "Reveal safety copies" opens the folder. There is no restore button:
+  the files are plain Markdown, and when a restore action arrives it will
+  write into a NEW folder, never over the live one.
+
+Six tests: change detection, byte-identical verification, an unreadable
+source storing nothing, hyphenated names round-tripping, 500 synthetic
+snapshots over 200 days honouring every tier with the newest surviving, and
+the byte cap evicting oldest first. 84 tests.
+
 ### Recovery screen on the Mac (observational first)
 
 Right-click the menu bar glyph, then Recovery. One window that answers "is
