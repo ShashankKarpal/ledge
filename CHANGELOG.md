@@ -18,6 +18,29 @@ All notable changes to Ledge. History before v0.4.0 was not tracked in this file
 
 ## Unreleased
 
+### Save on quit for SIGTERM, and a journal that no longer waits for a failure (Mac)
+
+Two gaps in the editor's last line of defence, found by reading the quit
+path after the same class of bug surfaced in a sibling app:
+
+- `applicationWillTerminate` was the only place the panel saved on quit, and
+  AppKit never runs it for a signal. `pkill -x Ledge` (what deploy.sh used),
+  `launchctl bootout`, and a shutdown that gives up waiting all send SIGTERM,
+  whose default disposition ends the process at once. SIGTERM and SIGINT are
+  now routed through a DispatchSource into the ordinary `NSApp.terminate`, so
+  the panel's `commit()` runs. Proven on the live Mac: the previous build
+  answered `kill -TERM` with launchd reporting termination `(2, 15, 15)`, a
+  signal death; this build reports `(0, 0, 0)`, a clean exit.
+- The recovery journal was written only AFTER a save failed, so text typed
+  inside the 0.8 second save debounce had no durable copy anywhere during a
+  crash, a power cut, or a SIGKILL. The journal is now written 0.2 seconds
+  after every edit, to local disk outside iCloud, and cleared by the
+  successful save that follows; a journal write still queued behind a save
+  is cancelled so a stale copy can never land after the clear. Inbox mode
+  only, because the next summon folds the journal back in as inbox entries.
+- `scripts/deploy.sh` asks the running app to quit through AppKit and waits
+  up to five seconds before falling back to `pkill`.
+
 ### Local versioned backups outside iCloud (Mac)
 
 iCloud is sync, not backup: a bad merge or a stray delete reaches every

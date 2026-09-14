@@ -59,6 +59,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         startFolderWatch()
         startDrainTimer()
+        installSignalHandlers()
+    }
+
+    // MARK: Signals (2026-09-14)
+
+    private var signalSources: [DispatchSourceSignal] = []
+
+    /// SIGTERM is what `pkill`, `launchctl bootout`, and a shutdown that gives
+    /// up waiting all send. Its default disposition ends the process at once,
+    /// and AppKit never turns it into applicationWillTerminate, so the
+    /// save-on-quit path below did not run for it (found on Zest, 2026-09-05,
+    /// and true here too). Route it, and SIGINT for terminal runs, into the
+    /// ordinary terminate so the panel's commit() gets its turn.
+    private func installSignalHandlers() {
+        for sig in [SIGTERM, SIGINT] {
+            signal(sig, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
+            source.setEventHandler {
+                NSLog("Ledge: signal \(sig) received, saving and quitting")
+                NSApp.terminate(nil)
+            }
+            source.resume()
+            signalSources.append(source)
+        }
     }
 
     // MARK: Sync health (brief 2026-09-03, item M4)
@@ -465,5 +489,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         panelController.saveIfNeeded()
         hotkey.unregister()
+        NSLog("Ledge: terminating cleanly")
     }
 }

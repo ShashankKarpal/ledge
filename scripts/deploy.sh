@@ -48,8 +48,17 @@ deploy_mac() {
     ./scripts/build-mac.sh > /tmp/ledge-macbuild.log 2>&1 \
         || { tail -20 /tmp/ledge-macbuild.log; die "Mac build failed, log at /tmp/ledge-macbuild.log"; }
     ok "built"
-    pkill -x Ledge 2>/dev/null || true
-    sleep 1
+    # Ask the running app to quit through AppKit so its save-on-quit runs;
+    # SIGTERM is now routed to the same path inside the app, but the polite
+    # form costs nothing and works on builds that predate that.
+    if pgrep -x Ledge > /dev/null; then
+        osascript -e 'tell application "Ledge" to quit' > /dev/null 2>&1 || pkill -x Ledge 2>/dev/null || true
+        for _ in 1 2 3 4 5 6 7 8 9 10; do
+            pgrep -x Ledge > /dev/null || break
+            sleep 0.5
+        done
+        pkill -x Ledge 2>/dev/null || true
+    fi
     rm -rf /Applications/Ledge.app
     cp -R build/Ledge.app /Applications/Ledge.app
     touch /Applications/Ledge.app

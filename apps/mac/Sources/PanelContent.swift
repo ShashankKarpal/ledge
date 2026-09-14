@@ -264,6 +264,10 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
     /// Persist the current surface. Empty entries evaporate; nothing else is touched.
     func commit() {
         saveWork?.cancel()
+        // A journal write still queued behind this save must not land after
+        // the save has cleared the journal, or the next summon would fold a
+        // stale copy back in.
+        journalWork?.cancel()
         guard editorPopulated, textView != nil else { return }
         if textView.string == lastSetEditorText { return }
         // lastSetEditorText moves only after a successful write. The old code
@@ -459,7 +463,30 @@ final class PanelContentViewController: NSViewController, NSTextViewDelegate {
 
     func textDidChange(_ notification: Notification) {
         scheduleStyle()
+        scheduleJournal()
         scheduleSave()
+    }
+
+    /// The recovery journal used to be written only AFTER a save failed, so
+    /// text typed inside the 0.8 second save debounce had no durable copy
+    /// anywhere: a SIGTERM (deploy.sh's pkill, launchctl, a shutdown that
+    /// gives up waiting), a crash or a power cut in that window lost it,
+    /// and AppKit does not run applicationWillTerminate for a signal. Now the
+    /// journal is written 0.2 seconds after every edit, to local disk outside
+    /// iCloud, and cleared by the successful save that follows. Inbox mode
+    /// only: the next summon folds the journal back in as inbox entries, which
+    /// is meaningless for a note (2026-09-14).
+    private var journalWork: DispatchWorkItem?
+
+    private func scheduleJournal() {
+        guard case .inbox = mode else { return }
+        journalWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.textView.string != self.lastSetEditorText else { return }
+            self.writeRecoveryJournal(self.textView.string)
+        }
+        journalWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: work)
     }
 
     private func scheduleStyle() {
