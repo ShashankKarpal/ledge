@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var drainTimer: Timer?
     private var dragCapture: DragJiggleCaptureController?
     private var settingsWindow: SettingsWindowController?
+    private var recoveryWindow: RecoveryWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let root = LedgeStore.defaultRoot()
@@ -41,7 +42,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NSWorkspace.shared.activateFileViewerSelecting([self.store.inboxURL])
             },
             capture: { [weak self] text in self?.quickCapture(text) ?? false },
-            openSettings: { [weak self] in self?.showSettings() }
+            openSettings: { [weak self] in self?.showSettings() },
+            openRecovery: { [weak self] in self?.showRecovery() }
         )
 
         dragCapture = DragJiggleCaptureController(
@@ -278,6 +280,91 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindow?.showWindow(nil)
         settingsWindow?.window?.center()
         settingsWindow?.window?.makeKeyAndOrderFront(nil)
+    }
+
+    // MARK: Recovery (observational first, 2026-09-14)
+
+    /// The local folder outside iCloud that holds this Mac's safety copies:
+    /// the capture log, the editor recovery journal, and backups.
+    static var safetyCopiesURL: URL {
+        CaptureLog.defaultURL().deletingLastPathComponent()
+    }
+
+    /// Everything the Recovery window shows, read from disk right now. Reads
+    /// only; the report's own tests prove it writes nothing into the folder
+    /// and carries no capture text.
+    func gatherRecoveryReport() -> RecoveryReport {
+        updateSyncHealth()
+        return RecoveryReport.gather(RecoveryReport.Sources(
+            store: store,
+            captureLog: Self.captureLog,
+            editorJournalURL: PanelContentViewController.recoveryJournalURL,
+            backups: nil,
+            selfDevice: PanelContentViewController.deviceLabel,
+            appVersion: Self.appVersion,
+            platform: "macOS",
+            syncHealthLine: currentSyncHealth
+        ))
+    }
+
+    /// The one write Recovery may ask for: the ordinary drain-and-commit path,
+    /// run now instead of on the next timer tick. Nothing here is new code
+    /// with a new failure mode; it is the same path the 5-minute maintenance
+    /// takes, with its outcome put into words.
+    func retryFiling() -> String {
+        do {
+            // loadInbox already folds conflict versions and repairs headers,
+            // saving when it changed anything; the spool drain is the step
+            // that can still be waiting. Same order as maintain().
+            var inbox = try store.loadInbox()
+            let repairs = store.lastLoadRepairs
+            let batch = try store.drainSpool(into: &inbox)
+            if batch.added > 0 {
+                try store.saveInbox(inbox)
+            }
+            try batch.commit()
+            writeHeartbeat(force: batch.added > 0)
+            updateSyncHealth(force: true)
+            panelController.maintenanceFailure = nil
+            var parts: [String] = []
+            switch batch.added {
+            case 0: break
+            case 1: parts.append("1 capture folded into the inbox")
+            default: parts.append("\(batch.added) captures folded into the inbox")
+            }
+            if !repairs.isEmpty {
+                parts.append(repairs.count == 1 ? "1 repair applied" : "\(repairs.count) repairs applied")
+            }
+            if parts.isEmpty {
+                return "Nothing was waiting. The spool is empty and the inbox needed no repair."
+            }
+            return parts.joined(separator: "; ") + "."
+        } catch {
+            return "Could not file right now: \(error.localizedDescription). Nothing was lost; the spool keeps what it had."
+        }
+    }
+
+    private func showRecovery() {
+        if recoveryWindow == nil {
+            recoveryWindow = RecoveryWindowController(actions: RecoveryActions(
+                gather: { [weak self] in
+                    self?.gatherRecoveryReport() ?? RecoveryReport.gather(RecoveryReport.Sources(
+                        store: LedgeStore(root: LedgeStore.defaultRoot()),
+                        selfDevice: "Mac", appVersion: Self.appVersion, platform: "macOS"))
+                },
+                retryFiling: { [weak self] in self?.retryFiling() ?? "Ledge is not ready." },
+                revealFolder: { [weak self] in
+                    guard let self else { return }
+                    NSWorkspace.shared.activateFileViewerSelecting([self.store.inboxURL])
+                },
+                revealSafetyCopies: {
+                    let url = Self.safetyCopiesURL
+                    try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
+            ))
+        }
+        recoveryWindow?.show()
     }
 
     /// Shared quiet capture path for the mini-popover (A1) and the edge drop

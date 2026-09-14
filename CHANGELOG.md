@@ -18,6 +18,39 @@ All notable changes to Ledge. History before v0.4.0 was not tracked in this file
 
 ## Unreleased
 
+### Recovery screen on the Mac (observational first)
+
+Right-click the menu bar glyph, then Recovery. One window that answers "is
+sync actually alive, and did anything go missing" from what is already on
+disk, without asking iCloud for anything:
+
+- Folder: path, reachable, inbox.md size and age, iCloud download state,
+  parsed entry and day counts, the 16-character digest every heartbeat quotes.
+- Sync: the health line, every device's heartbeat with age, version and
+  whether it holds the same bytes as this Mac, unresolved conflict versions,
+  the last install stamp.
+- Captures: how many wait in the spool, how many the write-ahead capture log
+  recorded, how many are unaccounted for (stamp and device only), whether the
+  editor recovery journal holds unsaved text.
+- Incidents: the last 30 days summarised (count, total, longest, how many
+  began within an hour of an install) and the last ten listed.
+
+Safe actions only: Retry filing (the ordinary drain-and-commit path, run now,
+with its outcome in words), Reveal folder, Reveal safety copies (the local
+folder outside iCloud that holds the capture log and journal), and Copy
+diagnostic report. There is no restore action yet; when it arrives it will
+write into a NEW folder, never over the live one.
+
+The report is content-free by construction and by test: `RecoveryTests`
+plants a phrase in the inbox, the spool, the capture log and the editor
+journal and asserts none of them can reach the report text; a second test
+takes a byte-level snapshot of the folder before and after gathering and
+asserts nothing changed, so the screen can never become load on the transport
+it describes. The window refreshes every 20 seconds while open and never
+while closed. The "captures are not accounted for" menu row now opens it.
+Shared model in LedgeCore (`RecoveryReport`) so the iOS screen, when it
+comes, shows the same truth. 78 tests.
+
 ### Deploy verification: never compare clocks across devices
 
 Four false failures in two days all came from one mistake, and reordering the

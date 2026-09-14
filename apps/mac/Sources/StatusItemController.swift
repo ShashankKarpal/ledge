@@ -11,6 +11,7 @@ final class StatusItemController: NSObject {
     private let openFolder: () -> Void
     private let capture: (String) -> Bool
     private let openSettings: () -> Void
+    private let openRecovery: () -> Void
     private var popover: NSPopover?
     private let menu = NSMenu()
     private let syncHealthItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
@@ -38,11 +39,12 @@ final class StatusItemController: NSObject {
         }
     }
 
-    init(togglePanel: @escaping () -> Void, openFolder: @escaping () -> Void, capture: @escaping (String) -> Bool, openSettings: @escaping () -> Void) {
+    init(togglePanel: @escaping () -> Void, openFolder: @escaping () -> Void, capture: @escaping (String) -> Bool, openSettings: @escaping () -> Void, openRecovery: @escaping () -> Void) {
         self.togglePanel = togglePanel
         self.openFolder = openFolder
         self.capture = capture
         self.openSettings = openSettings
+        self.openRecovery = openRecovery
         super.init()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -73,6 +75,13 @@ final class StatusItemController: NSObject {
         prefs.target = self
         menu.addItem(prefs)
 
+        // Recovery: where to look when sync feels wrong. Observational first;
+        // safe actions only. Always present so it can be found before it is
+        // needed, never highlighted, per the no-badges rule.
+        let recovery = NSMenuItem(title: "Recovery\u{2026}", action: #selector(recoveryAction), keyEquivalent: "")
+        recovery.target = self
+        menu.addItem(recovery)
+
         menu.addItem(.separator())
 
         // Sync health, the one line that is allowed to say something is wrong.
@@ -83,7 +92,10 @@ final class StatusItemController: NSObject {
         syncHealthItem.isHidden = true
         menu.addItem(syncHealthItem)
 
-        captureAlertItem.isEnabled = false
+        // Clickable: the row that says captures are unaccounted for opens the
+        // screen that lists when they were made and what to do about it.
+        captureAlertItem.target = self
+        captureAlertItem.action = #selector(recoveryAction)
         captureAlertItem.isHidden = true
         menu.addItem(captureAlertItem)
 
@@ -147,5 +159,6 @@ final class StatusItemController: NSObject {
     @objc private func miniAction() { togglePopover() }
     @objc private func folderAction() { openFolder() }
     @objc private func settingsAction() { openSettings() }
+    @objc private func recoveryAction() { openRecovery() }
     @objc private func quitAction() { NSApp.terminate(nil) }
 }
