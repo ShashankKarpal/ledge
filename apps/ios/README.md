@@ -22,7 +22,7 @@ The iOS companion to the Ledge Mac app, plus a one-screen watch capture relay. E
    open Ledge.xcodeproj
    ```
 
-4. In Xcode, select the project, then set your Team on **both** targets (Ledge and LedgeWatch) under Signing and Capabilities. A free personal team works fine.
+4. In Xcode, select the project, then set your Team on **all four** targets (Ledge, LedgeWatch, LedgeWidgets and LedgeWatchWidgets) under Signing and Capabilities. A free personal team works fine.
 
 5. **Change the bundle identifiers.** They ship as the maintainer's own, `com.shashankkarpal.ledge` and `com.shashankkarpal.ledge.watchkitapp` (plus `.widgets` on each for the widget extensions), and you must use identifiers nobody else has claimed. Edit `project.yml` (recommended, then re-run `xcodegen generate`) or change them in Xcode:
    - iOS app: `com.yourname.ledge` (anything unique)

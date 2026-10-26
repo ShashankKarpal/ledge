@@ -47,8 +47,9 @@ check here first.
   without an observed failure. Recovery is observational first, and a restore
   writes only into a NEW folder. Any LedgeCore change is typechecked for
   watchOS and iOS (scripts/check-core-platforms.sh) before a deploy or a
-  release. scripts/notarize.sh is the only release path, and the README badge
-  and download name move only in the release commit.
+  release. scripts/notarize.sh is the only release path, and the README's
+  version badge and download file name move only in the release commit
+  (other README edits are ordinary docs maintenance).
 - 2026-09-14: Claude chooses the features and their order, within the rules
   above.
 - 2026-10-11: the 30-second tour GIF, the screenshots and the Reddit post are
