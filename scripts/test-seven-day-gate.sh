@@ -73,10 +73,9 @@ f="$WORK/probe-only-today.md"
 { section 0 probe; section 1 real; section 2 real; } > "$f"
 expect "a probe-only today is not a capture day" 2 1 "$f"
 
-f="$WORK/probe-fakes-seven.md"
-{ section 0 real; section 1 real; section 2 real; section 3 probe
-  section 4 real; section 5 real; section 6 real; } > "$f"
-expect "a deploy cannot complete a seven-day run" 3 1 "$f"
+f="$WORK/probe-completes-seven.md"
+{ section 0 probe; for i in 1 2 3 4 5 6; do section "$i" real; done; } > "$f"
+expect "a deploy today cannot be the seventh day" 6 1 "$f"
 
 f="$WORK/probe-and-real.md"
 { section 0 probe real; section 1 real probe; } > "$f"
