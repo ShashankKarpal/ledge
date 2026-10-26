@@ -11,9 +11,12 @@
 #                    so agent sessions can check it before feature work.
 #
 # A day counts when it has at least one `### HH:mm` entry under its
-# `## yyyy-MM-dd` header. Today counts toward the run if it already has an
+# `## yyyy-MM-dd` header. An entry headed `### HH:mm · deploy.sh` is the probe
+# scripts/deploy.sh folds in to prove sync, not a capture, so it never counts.
+# Today counts toward the run if it already has an
 # entry; a today with no entry yet does not break the run, because the day
-# is not over. macOS only (BSD date). Built by Claude (Anthropic).
+# is not over. macOS only (BSD date). Tests: scripts/test-seven-day-gate.sh.
+# Built by Claude (Anthropic).
 set -euo pipefail
 
 GATE_DAYS=7
@@ -28,6 +31,7 @@ fi
 # Days that contain at least one entry header, one per line, deduplicated.
 DAYS_WITH_ENTRIES="$(awk '
     /^## [0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]*$/ { day = $2; next }
+    /^### [0-9]{2}:[0-9]{2} · deploy\.sh[[:space:]]*$/ { next }
     /^### [0-9]{2}:[0-9]{2}([[:space:]]|$)/ { if (day != "") seen[day] = 1 }
     END { for (d in seen) print d }
 ' "$INBOX" | sort -u)"
