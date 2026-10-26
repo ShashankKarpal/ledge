@@ -20,16 +20,19 @@ Last review: 2026-10-26. The log held 3 lines; its last write was 2026-09-25
   than 15 minutes old has shown a different inbox digest for at least 5 minutes
   (`LedgeStore.evaluatePeer`: `liveWindow` 15 minutes, `disagreementGrace`
   300 seconds). `startedAt` is when the observer first saw the current pair
-  of digests disagree, not when the line was written. If either device's
-  inbox changes during a stall, the pair changes and the clock restarts, so a
-  stall with a capture in it can log a later start than the real one.
+  of digests disagree, not when the line was written. Until the line is
+  written, a change to either inbox restarts that clock, so a stall whose
+  inboxes keep changing can log a later start than the real one. Once
+  written, a line keeps its start: a later observation extends the open line
+  instead of adding one (`IncidentLog.record`).
 - The Mac checks on its 300-second drain timer while the panel is closed
   (more often while it is open). Its start and end stamps land on those
   ticks, so a Mac line's duration is a multiple of about 5 minutes, and each
   end can be up to one tick away from the real moment.
-- `endedAt` is set when that condition stops being true: either the two
-  devices agree again, or the peer's heartbeat gets older than 15 minutes. The
-  log does not record which of the two happened.
+- `endedAt` is set when that condition stops being true: the two devices
+  agree again, the peer's heartbeat gets older than 15 minutes, or either side
+  has no inbox digest to compare (for example a device that cannot read its
+  inbox). The log does not record which of these happened.
 - `secondsAfterInstall` counts from `.ledge/last-install.txt`, which only
   `scripts/deploy.sh` writes. A Mac install from Homebrew or the release zip
   does not stamp it. (The comment on `lastInstallURL` in `Store.swift` also
@@ -77,9 +80,10 @@ the phone's clock against the Mac's, see above).
 
 Recorded here instead of fixed, because a review changes no app code:
 
-1. The close reason (agreement or a quiet peer) is not stored.
+1. The close reason (agreement, a quiet peer, or a missing digest) is not
+   stored.
 2. The install stamp comes only from `deploy.sh`.
 3. A quiet log is evidence of healthy sync only for periods when both apps
    were running.
-4. Mac lines are timed to 5-minute ticks, and a digest change during a stall
-   restarts its clock (see How to read a line).
+4. Mac lines are timed to 5-minute ticks, and a digest change before a line
+   is written restarts its clock (see How to read a line).
