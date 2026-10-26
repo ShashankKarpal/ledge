@@ -50,6 +50,10 @@ expect() {
     out="$(bash "$GATE" "$inbox" 2>&1)"
     rc=$?
     set -e
+    if [ "$(date +%Y-%m-%d)" != "$START_DAY" ]; then
+        echo "DATE CHANGED during the run (fixtures and gate saw different days): run again"
+        exit 2
+    fi
     run="$(printf '%s\n' "$out" | sed -n 's/^Current run: \([0-9][0-9]*\) .*/\1/p')"
     if [ "$run" = "$want_run" ] && [ "$rc" = "$want_rc" ]; then
         echo "ok    $name (run $run, exit $rc)"
@@ -91,18 +95,20 @@ expect "probes alone are a run of zero" 0 1 "$f"
 
 # The probe fixture above copies deploy.sh's tag. Every probe deploy.sh writes
 # must still carry exactly that tag, or the gate's skip rule stops matching.
-probes="$(grep -c "printf '\[\[%s · " "$DEPLOY" || true)"
-tagged="$(grep -c "printf '\[\[%s · deploy\.sh\]\] " "$DEPLOY" || true)"
-if [ "$probes" -gt 0 ] && [ "$probes" = "$tagged" ]; then
-    echo "ok    every deploy.sh probe carries the deploy.sh tag ($tagged of $probes)"
-else
-    echo "FAIL  deploy.sh probes and the gate's tag disagree: $tagged of $probes tagged"
+# Probes are counted by their writer (every spool-append.js call), so a probe
+# built some other way still has to show up as tagged.
+if [ ! -f "$DEPLOY" ]; then
+    echo "FAIL  no deploy.sh at $DEPLOY"
     failures=$((failures + 1))
-fi
-
-if [ "$(date +%Y-%m-%d)" != "$START_DAY" ]; then
-    echo "DATE CHANGED during the run (fixtures and gate saw different days): run again"
-    exit 2
+else
+    probes="$(grep -c 'spool-append\.js' "$DEPLOY" || true)"
+    tagged="$(grep -c "printf '\[\[%s · deploy\.sh\]\] " "$DEPLOY" || true)"
+    if [ "$probes" -gt 0 ] && [ "$probes" = "$tagged" ]; then
+        echo "ok    every deploy.sh probe carries the deploy.sh tag ($tagged of $probes)"
+    else
+        echo "FAIL  deploy.sh probes and the gate's tag disagree: $tagged of $probes tagged"
+        failures=$((failures + 1))
+    fi
 fi
 
 if [ "$failures" -eq 0 ]; then

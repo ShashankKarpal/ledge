@@ -13,10 +13,10 @@
 # A day counts when it has at least one `### HH:mm` entry under its
 # `## yyyy-MM-dd` header. An entry headed `### HH:mm · deploy.sh` is the probe
 # scripts/deploy.sh folds in to prove sync, not a capture, so it never counts.
-# Today counts toward the run if it already has an
-# entry; a today with no entry yet does not break the run, because the day
-# is not over. macOS only (BSD date). Tests: scripts/test-seven-day-gate.sh.
-# Built by Claude (Anthropic).
+# Today counts toward the run if it already has an entry; a today with no
+# entry yet does not break the run, because the day is not over. macOS only
+# (BSD date). Tests: scripts/test-seven-day-gate.sh. Built by Claude
+# (Anthropic).
 set -euo pipefail
 
 GATE_DAYS=7
