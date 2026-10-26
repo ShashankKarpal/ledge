@@ -27,6 +27,7 @@ The iOS companion to the Ledge Mac app, plus a one-screen watch capture relay. E
 5. **Change the bundle identifiers.** They ship as the maintainer's own, `com.shashankkarpal.ledge` and `com.shashankkarpal.ledge.watchkitapp` (plus `.widgets` on each for the widget extensions), and you must use identifiers nobody else has claimed. Edit `project.yml` (recommended, then re-run `xcodegen generate`) or change them in Xcode:
    - iOS app: `com.yourname.ledge` (anything unique)
    - Watch app: `com.yourname.ledge.watchkitapp` (must be the iOS id plus `.watchkitapp`)
+   - Widget extensions: `com.yourname.ledge.widgets` and `com.yourname.ledge.watchkitapp.widgets` (each must start with its parent app's id, or Xcode refuses to embed it)
    - Also update `WKCompanionAppBundleIdentifier` in the LedgeWatch target's info so it matches your new iOS id. In `project.yml` these live next to each other, marked with comments.
 
 6. Plug in your iPhone, pick it as the run destination, and run the Ledge scheme. The watch app installs alongside it when a paired watch is available (or run the LedgeWatch scheme directly on the watch).
