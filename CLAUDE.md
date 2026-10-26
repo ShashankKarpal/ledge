@@ -32,6 +32,28 @@ check here first.
   (capture-trust as scope-capped), then item 3 (VERSION single source plus CI
   drift gate); item 4, the seven-day gate, initiates after item 3 lands and
   governs all feature work after it.
+- 2026-09-04: the CloudKit ban is lifted, but there is NO migration until
+  .ledge/incidents.log carries two to four weeks of evidence under real use
+  (reviewed in docs/INCIDENT-LEDGER.md). The destination is Option C: the
+  CloudKit private database as the store, with a one-way Markdown export.
+  Pin the development or production container before any build. Keep the
+  WatchConnectivity relay.
+- 2026-09-04: dictation is not a Ledge feature. The owner dictates with a
+  system-wide dictation tool; Ledge has no speech code.
+- Engineering rules (2026-09-04 and 2026-09-14): never destroy the durable
+  copy before the replacement is on disk; never rewrite in place when an
+  append will do; never compare a timestamp from one device against a clock
+  on another; monitoring must not tax the transport it measures; no new code
+  without an observed failure. Recovery is observational first, and a restore
+  writes only into a NEW folder. Any LedgeCore change is typechecked for
+  watchOS and iOS (scripts/check-core-platforms.sh) before a deploy or a
+  release. scripts/notarize.sh is the only release path, and the README badge
+  and download name move only in the release commit.
+- 2026-09-14: Claude chooses the features and their order, within the rules
+  above.
+- 2026-10-11: the 30-second tour GIF, the screenshots and the Reddit post are
+  the owner's, for later. Do not raise them.
+- Never press the owner about daily capture.
 
 ## Repo visibility and publish policy
 
@@ -81,13 +103,15 @@ check here first.
 - Session logs: ../_claude-chats/ (kk1 and kk2 subfolders; filenames contain
   "ledge").
 - Knowledge dumps v1 to v5, the densest project reasoning, deliberately purged
-  from this repo's public history: ../_private/ledge-knowledge-dumps/ (backed
-  up nightly) with a second copy in ../_archive/ledge-knowledge-dumps/ (M4
-  only). Dump v2's correction banner and dump v3 section 1 record the signing
+  from this repo's public history: ../_private/ledge-knowledge-dumps/ (five
+  files, carried by the nightly projects backup). There is no second copy:
+  ../_archive/ledge-knowledge-dumps/, named here until 2026-10-26, does not
+  exist. Dump v2's correction banner and dump v3 section 1 record the signing
   transition.
 - Newest dated doc wins. As of 2026-08-17: status is
   docs/STATUS-2026-08-17.md, roadmap is docs/ROADMAP-REDTEAM-2026-08-17.md
-  (the final five and build order).
+  (the final five and build order). Sync incidents: docs/INCIDENT-LEDGER.md
+  (last review 2026-10-26).
 
 ## Operating rules
 

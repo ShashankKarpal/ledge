@@ -226,8 +226,8 @@ scripts/        build, deploy, notarize, the README tour converter, and the seve
 | v0.4.x | Capture trust: the watch relay never loses or duplicates a capture, the inbox self-heals, single-source version stamping in CI, the seven-day gate | Shipped |
 | v0.5.x | Capture durability: write-ahead capture log, editor recovery journal, incident log, deploy verification, Recovery window, local backups outside iCloud, merge-as-edit, save on SIGTERM. Reminders handoff shipped on iOS (entry context menu). | Shipped |
 | v0.5 gate | Reminders handoff on the Mac. The iOS Share Sheet extension is killed (the Capture to Ledge Shortcut already covers the share sheet). | Gated |
-| v0.6 | Optional local AI adapter (LM Studio, off by default) for inbox summaries and stale-loop surfacing, end-of-day sweep | Planned |
-| Later | TestFlight beta, inline images, focus mode, App Store release | Planned |
+| Dropped | Local AI adapter, end-of-day sweep, inline images and focus mode, TestFlight beta: cut in the 2026-08-17 roadmap review (`docs/ROADMAP-REDTEAM-2026-08-17.md`) | Dropped |
+| Later | App Store release | Deferred |
 
 New feature work is gated: a version marked **Gated** starts only after the
 maintainer has captured into Ledge for seven consecutive days, verified by
