@@ -19,8 +19,14 @@ Last review: 2026-10-26. The log held 3 lines; its last write was 2026-09-25
 - A `disagreement` line is written by the observer once a peer heartbeat less
   than 15 minutes old has shown a different inbox digest for at least 5 minutes
   (`LedgeStore.evaluatePeer`: `liveWindow` 15 minutes, `disagreementGrace`
-  300 seconds). `startedAt` is when the observer first saw the mismatch, not
-  when the line was written.
+  300 seconds). `startedAt` is when the observer first saw the current pair
+  of digests disagree, not when the line was written. If either device's
+  inbox changes during a stall, the pair changes and the clock restarts, so a
+  stall with a capture in it can log a later start than the real one.
+- The Mac checks on its 300-second drain timer while the panel is closed
+  (more often while it is open). Its start and end stamps land on those
+  ticks, so a Mac line's duration is a multiple of about 5 minutes, and each
+  end can be up to one tick away from the real moment.
 - `endedAt` is set when that condition stops being true: either the two
   devices agree again, or the peer's heartbeat gets older than 15 minutes. The
   log does not record which of the two happened.
@@ -50,14 +56,15 @@ the phone's clock against the Mac's, see above).
 
 - Kind and devices: a disagreement seen by the Mac, with the iPhone as the
   peer, on 0.5.2.
-- Duration: exactly 10 minutes, then closed. Nothing is open, and no line has
-  been written since.
+- Duration: 10 minutes as logged, then closed. Both stamps sit on the Mac's
+  5-minute ticks, so the real mismatch lasted somewhere between about 5 and
+  about 15 minutes. Nothing is open, and no line has been written since.
 - Time since install: 11.2 days after the last `deploy.sh` install, the
   iPhone and Watch install of 2026-09-14 at 12:24 UTC. It is the first line
   that did not begin within seconds or hours of a reinstall.
 - What it shows about the reinstall hypothesis
   (`docs/SYNC-RELIABILITY-BRIEF.md`, section 4): nothing either way. It did
-  not follow an install, and it healed by itself in 10 minutes, unlike the
+  not follow an install, and it healed by itself within minutes, unlike the
   multi-hour stalls of 2026-08-19 and 2026-09-03.
 - Inference, not proven: a 10-minute mismatch that clears on its own fits one
   change taking a few minutes to cross iCloud, or the phone going quiet after
@@ -74,3 +81,5 @@ Recorded here instead of fixed, because a review changes no app code:
 2. The install stamp comes only from `deploy.sh`.
 3. A quiet log is evidence of healthy sync only for periods when both apps
    were running.
+4. Mac lines are timed to 5-minute ticks, and a digest change during a stall
+   restarts its clock (see How to read a line).
