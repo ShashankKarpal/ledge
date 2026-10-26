@@ -6,14 +6,19 @@
 #
 # Run it:                 bash scripts/test-seven-day-gate.sh
 # Against another copy:   GATE=/path/to/seven-day-gate.sh bash scripts/test-seven-day-gate.sh
-# Exit code:              0 when every case passes, 1 otherwise.
+#                         (DEPLOY=/path/to/deploy.sh likewise)
+# Exit code:              0 when every case passes, 1 otherwise, 2 when the
+#                         date changed during the run (run it again).
 #
 # Dates are relative to today, so the cases hold on any day. macOS only
 # (BSD date), like the gate. Built by Claude (Anthropic).
 set -euo pipefail
 unset LEDGE_INBOX
 
-GATE="${GATE:-$(cd "$(dirname "$0")" && pwd)/seven-day-gate.sh}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+GATE="${GATE:-$HERE/seven-day-gate.sh}"
+DEPLOY="${DEPLOY:-$HERE/deploy.sh}"
+START_DAY="$(date +%Y-%m-%d)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -84,6 +89,22 @@ expect "untagged and lookalike-tagged entries count" 3 1 "$f"
 f="$WORK/probes-only.md"
 { section 0 probe; section 1 probe; } > "$f"
 expect "probes alone are a run of zero" 0 1 "$f"
+
+# The probe fixture above copies deploy.sh's tag. Every probe deploy.sh writes
+# must still carry exactly that tag, or the gate's skip rule stops matching.
+probes="$(grep -c "printf '\[\[%s · " "$DEPLOY" || true)"
+tagged="$(grep -c "printf '\[\[%s · deploy\.sh\]\] " "$DEPLOY" || true)"
+if [ "$probes" -gt 0 ] && [ "$probes" = "$tagged" ]; then
+    echo "ok    every deploy.sh probe carries the deploy.sh tag ($tagged of $probes)"
+else
+    echo "FAIL  deploy.sh probes and the gate's tag disagree: $tagged of $probes tagged"
+    failures=$((failures + 1))
+fi
+
+if [ "$(date +%Y-%m-%d)" != "$START_DAY" ]; then
+    echo "DATE CHANGED during the run (fixtures and gate saw different days): run again"
+    exit 2
+fi
 
 if [ "$failures" -eq 0 ]; then
     echo "PASS: all cases"
