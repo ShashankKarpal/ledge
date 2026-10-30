@@ -254,7 +254,7 @@
     }
   ],
   "brandVersion": "1.1.0",
-  "canonicalSourceCommit": "50a966d0de6da69881dca208e9149da05db94f83",
+  "canonicalSourceCommit": "e5256725d736fc4fcaf6f39da264219129e08c64",
   "canonicalSourceDirty": false,
   "contentSetSha256": "b4d533595c1a757f68760af3c5037d7d66570799b41b2596def88a81467fb54b",
   "generatorSha256": "7657dd8c0fc936562f691ee8ce8152c52cff73cd8a194bbb83a6d1f3461d9a34",
