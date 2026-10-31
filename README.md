@@ -245,7 +245,7 @@ mechanic for you; the app itself still has no streaks and never will.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT for the source code; see [LICENSE](LICENSE). The name, logos, icons and other brand assets are not covered; see [TRADEMARKS.md](TRADEMARKS.md).
 
 ## Author
 
