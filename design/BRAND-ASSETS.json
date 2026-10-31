@@ -254,13 +254,13 @@
     }
   ],
   "brandVersion": "1.1.0",
-  "canonicalSourceCommit": "e5256725d736fc4fcaf6f39da264219129e08c64",
+  "canonicalSourceCommit": "b681f8e6b54f1d311ba55834a81653dc179ce03f",
   "canonicalSourceDirty": false,
   "contentSetSha256": "b4d533595c1a757f68760af3c5037d7d66570799b41b2596def88a81467fb54b",
-  "generatorSha256": "7657dd8c0fc936562f691ee8ce8152c52cff73cd8a194bbb83a6d1f3461d9a34",
+  "generatorSha256": "3863ed056458cb768d47c28ad075afe2c4815be1c0b341d149c1d0a10cd23b0f",
   "lockSha256": "d8574f93ee9b99d1758cfbb20da047518e49df75c0cd8a5ac5697b397542a802",
   "project": "ledge",
   "schemaVersion": 1,
-  "tokenSha256": "4436a3733ac7810580b0c586b7c044e8bb737c25e21ec33176127095f4bf6f23",
+  "tokenSha256": "62c4feeeb3f167d2c4b649594a1dd9b66d57677826610cdf08a6f27ebf48e837",
   "visibility": "public"
 }
