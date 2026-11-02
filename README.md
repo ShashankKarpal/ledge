@@ -195,9 +195,12 @@ For iPhone, iPad, and Watch: `brew install xcodegen`, then `cd apps/ios && xcode
 | Cmd+N | New named note |
 
 ```bash
-./scripts/deploy.sh          # Mac, iPhone, and Watch
+./scripts/deploy.sh          # all: Mac, iPhone, and Watch, then a sync check
 ./scripts/deploy.sh mac      # Mac only
+./scripts/deploy.sh phone    # iPhone only
 ./scripts/deploy.sh watch    # Watch only
+./scripts/deploy.sh ios      # iPhone and Watch
+./scripts/deploy.sh verify   # prove sync between devices without installing anything
 ```
 
 Do not reinstall the Watch app from the iPhone Watch app toggle. That path is for App Store builds; on a development build it fails, and switching it off uninstalls the app. Use `./scripts/deploy.sh watch`.
@@ -210,7 +213,7 @@ apps/mac/       Mac sidebar app
 apps/ios/       iPhone and iPad app, the watchOS relay, and the widgets
 shortcuts/      capture trigger setup (intent-first) and the zero-app fallback recipe
 design/         brand assets, tokens, screenshots, BRAND.md
-docs/           architecture spec and the file-format contract
+docs/           architecture spec, file-format contract, sync reliability brief, incident ledger, roadmap red-team review, uninstall guide, tour storyboard
 scripts/        build, deploy, notarize, the README tour converter, and the seven-day gate
 ```
 

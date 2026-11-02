@@ -381,3 +381,10 @@ correlating the Mac's `bird` upload counts against the deploy time.
 - iOS balances security-scoped folder access (one active scope per root) so repeated reconnects can no longer exhaust the per-process cap and show "lost access" until relaunch.
 - Captured text that contains header-shaped or capture-marker-shaped lines is escaped with a zero-width space, so shared pages, Shortcut input and Watch relay text cannot forge attribution, dates, or day sections. Covered by a LedgeCore test.
 - `Entry.id` is derived from stamp, device and text instead of a fresh UUID per parse, so the iOS list no longer rebuilds on every 2-second refresh.
+
+## Unreleased
+
+- The seven-day gate (`scripts/seven-day-gate.sh`) no longer counts deploy probes as capture days: entries headed exactly `### HH:mm · deploy.sh` are skipped. `scripts/test-seven-day-gate.sh` checks it by hand (seven fixtures; never reads the live inbox).
+- `docs/INCIDENT-LEDGER.md`: one row per line of `.ledge/incidents.log`, with its timing and close rules.
+- Licence: the source code stays MIT (LICENSE unchanged). The name, logos, icons and other brand assets are reserved in the new TRADEMARKS.md; the README licence line points to both.
+- README: every deploy target listed; docs folder described. Audit readme-truth-2026-11.
