@@ -1,6 +1,6 @@
 # ledge brand: Ink and Bone
 
-This repository consumes Ink and Bone v1.1.0. The canonical definition and
+This repository consumes Ink and Bone v1.2.0. The canonical definition and
 the only generator live in `ShashankKarpal/shashankkarpal`, under
 `design/brand/` and `design/marks/`.
 
